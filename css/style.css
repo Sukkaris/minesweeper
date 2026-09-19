@@ -1,0 +1,377 @@
+/* ============================================================
+   レイアウト・共通スタイル・CSS 変数の定義
+   色・寸法・フォントはすべてここで変数化し、テーマは themes.css で上書きする。
+   ============================================================ */
+
+:root {
+  /* --- フォント --- */
+  --font-board: Menlo, 'Courier New', monospace;
+  --font-ui: Menlo, 'Courier New', monospace;
+  --font-weight-board: 700;
+
+  /* --- 寸法 --- */
+  --header-height: 50px;
+  --footer-height: 50px;
+  --header-side-gap: 12px;       /* 三点セットと歯車の最低間隔 */
+  --header-edge-gap: 12px;       /* 歯車と画面右端の間隔 */
+  --gear-size: 36px;
+  --smiley-size: 36px;
+  --led-font-size: 22px;
+  --board-gap: 6px;              /* 盤面周りの余白（左右 6px ずつ = 計 12px） */
+  --board-frame: 3px;            /* 盤面の外枠の太さ */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* --- 色（既定値 = クラシックテーマ） --- */
+  --color-bg: #c0c0c0;
+  --color-ui-fg: #000000;
+  --color-panel: #c0c0c0;
+  --color-bevel-light: #ffffff;
+  --color-bevel-dark: #808080;
+
+  --color-board-bg: #c0c0c0;
+  --color-cell-hidden: #c0c0c0;
+  --color-cell-revealed: #c0c0c0;
+  --color-cell-border: #808080;
+  --color-cell-exploded: #ff0000;
+
+  --color-n1: #0000ff;
+  --color-n2: #008000;
+  --color-n3: #ff0000;
+  --color-n4: #000080;
+  --color-n5: #800000;
+  --color-n6: #008080;
+  --color-n7: #000000;
+  --color-n8: #808080;
+
+  --color-flag: #ff0000;
+  --color-flag-pole: #000000;
+  --color-mine: #000000;
+  --color-mine-shine: #ffffff;
+  --color-wrong: #ff0000;
+
+  --color-led-bg: #000000;
+  --color-led-fg: #ff0000;
+
+  --color-smiley-face: #ffff00;
+  --color-smiley-line: #000000;
+
+  --color-button-bg: #c0c0c0;
+  --color-button-fg: #000000;
+  --color-button-active-bg: #808080;
+  --color-button-active-fg: #ffffff;
+}
+
+/* ---------- ベース ---------- */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-ui-fg);
+  font-family: var(--font-ui);
+  overflow: hidden;                 /* ページ自体はスクロールさせない */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;      /* 長押しメニューを出さない */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 共通 SVG 定義は描画しない */
+.svg-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---------- 3 層レイアウト ---------- */
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/* ヘッダー・フッターは固定。盤面 (.main) だけがスクロールする */
+.header,
+.footer {
+  flex: 0 0 auto;
+  position: relative;
+  background: var(--color-panel);
+  touch-action: none;               /* ピンチ・ダブルタップズームを無効化 */
+}
+
+.header {
+  height: calc(var(--header-height) + var(--safe-top));
+  padding-top: var(--safe-top);
+  box-shadow: inset 0 -2px 0 var(--color-bevel-dark);
+}
+
+.footer {
+  height: calc(var(--footer-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  box-shadow: inset 0 2px 0 var(--color-bevel-light);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;                    /* flex 子要素でスクロールを成立させる */
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;              /* 縦スクロールのみ許可。横スクロール・ズームは不可 */
+}
+
+/* ---------- ヘッダー ---------- */
+
+/* 三点セット。歯車の分だけ左右対称に余白を取り、親の全幅に対して中央寄せする */
+.header-center {
+  height: var(--header-height);
+  padding: 0 calc(var(--header-edge-gap) + var(--gear-size) + var(--header-side-gap));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* 残り地雷数・タイマー */
+.led {
+  font-family: var(--font-ui);
+  font-size: var(--led-font-size);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  min-width: 3.4ch;
+  padding: 4px 4px 3px;
+  text-align: right;
+  letter-spacing: 0.05em;
+  background: var(--color-led-bg);
+  color: var(--color-led-fg);
+  border: 1px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+}
+
+/* スマイリー */
+.smiley {
+  width: var(--smiley-size);
+  height: var(--smiley-size);
+  padding: 2px;
+  background: var(--color-button-bg);
+  border: 3px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+}
+
+.smiley:active {
+  border-color: var(--color-bevel-dark);
+  border-width: 2px;
+  padding: 3px;
+}
+
+.smiley svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.smiley .face-outline {
+  fill: var(--color-smiley-face);
+  stroke: var(--color-smiley-line);
+  stroke-width: 1.5;
+}
+
+.smiley .eyes circle { fill: var(--color-smiley-line); }
+.smiley .eyes-win path { fill: var(--color-smiley-line); }
+.smiley .eyes-lost path {
+  fill: none;
+  stroke: var(--color-smiley-line);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.smiley .mouth {
+  fill: none;
+  stroke: var(--color-smiley-line);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/* 表情の切り替え：data-face に応じて目と口だけを差し替える */
+.smiley .eyes, .smiley .mouth { display: none; }
+.smiley[data-face="normal"]  .eyes-normal, .smiley[data-face="normal"]  .mouth-normal  { display: block; }
+.smiley[data-face="pressed"] .eyes-normal, .smiley[data-face="pressed"] .mouth-pressed { display: block; }
+.smiley[data-face="won"]     .eyes-win,    .smiley[data-face="won"]     .mouth-win     { display: block; }
+.smiley[data-face="lost"]    .eyes-lost,   .smiley[data-face="lost"]    .mouth-lost    { display: block; }
+
+/* 歯車：右端に絶対配置し、三点セットの中央位置に影響させない */
+.gear {
+  position: absolute;
+  top: calc(var(--safe-top) + (var(--header-height) - var(--gear-size)) / 2);
+  right: var(--header-edge-gap);
+  width: var(--gear-size);
+  height: var(--gear-size);
+  padding: 6px;
+}
+
+.gear svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gear .gear-teeth rect,
+.gear .gear-ring { fill: var(--color-ui-fg); }
+.gear .gear-hole  { fill: var(--color-panel); }
+
+/* ---------- 盤面 ---------- */
+
+/* 盤面が収まるときは中央に置き、はみ出すときは上から並べてスクロールする */
+.board-wrap {
+  margin: auto;
+  padding: var(--board-gap);
+  flex: 0 0 auto;
+}
+
+.board {
+  --cols: 9;
+  --rows: 9;
+  --cell-size: 40px;                /* ui.js が実測値で上書きする */
+  --cell-bevel: max(2px, calc(var(--cell-size) * 0.09));
+  --cell-font-size: calc(var(--cell-size) * 0.62);
+
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell-size));
+  grid-auto-rows: var(--cell-size);
+  background: var(--color-board-bg);
+  border: var(--board-frame) solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  touch-action: pan-y;
+}
+
+.cell {
+  position: relative;
+  width: var(--cell-size);
+  height: var(--cell-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-board);
+  font-weight: var(--font-weight-board);
+  font-size: var(--cell-font-size);
+  line-height: 1;
+  overflow: hidden;
+}
+
+/* 未開放：左上が明るく右下が暗い立体ベベル */
+.cell.hidden,
+.cell.flag,
+.cell.wrong-flag,
+.cell.mine {
+  background: var(--color-cell-hidden);
+  border: var(--cell-bevel) solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+}
+
+/* 敗北時に開示した地雷は平坦に見せる */
+.cell.mine {
+  border: 1px solid var(--color-cell-border);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* 押している最中は平坦にへこませる */
+.cell.hidden.pressed {
+  border: 1px solid var(--color-cell-border);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* 開放済み：平坦で、細い暗色の枠線（左上のみ） */
+.cell.blank,
+.cell.number,
+.cell.exploded {
+  background: var(--color-cell-revealed);
+  border: 1px solid var(--color-cell-border);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.cell.exploded {
+  background: var(--color-cell-exploded);
+}
+
+.cell.n1 { color: var(--color-n1); }
+.cell.n2 { color: var(--color-n2); }
+.cell.n3 { color: var(--color-n3); }
+.cell.n4 { color: var(--color-n4); }
+.cell.n5 { color: var(--color-n5); }
+.cell.n6 { color: var(--color-n6); }
+.cell.n7 { color: var(--color-n7); }
+.cell.n8 { color: var(--color-n8); }
+
+/* ---------- マス内のアイコン ---------- */
+
+.cell .icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 12%;
+  pointer-events: none;
+}
+
+/* アイコンの色は index.html の <symbol> 内で CSS 変数（--color-flag 等）を参照している。
+   <use> の複製内には CSS セレクタが届かないので、ここでは形状ごとの色指定を書かない。 */
+
+/* ---------- フッター（暫定：難易度切替） ---------- */
+
+.difficulty-bar {
+  height: var(--footer-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.diff-btn {
+  min-width: 72px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 14px;
+  background: var(--color-button-bg);
+  color: var(--color-button-fg);
+  border: 2px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+}
+
+.diff-btn[aria-pressed="true"] {
+  background: var(--color-button-active-bg);
+  color: var(--color-button-active-fg);
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+}
