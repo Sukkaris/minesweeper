@@ -19,6 +19,12 @@
   --led-font-size: 22px;
   --board-gap: 6px;              /* 盤面周りの余白（左右 6px ずつ = 計 12px） */
   --board-frame: 3px;            /* 盤面の外枠の太さ */
+  --footer-gap: 10px;            /* 盤面とフッターの間の余白（誤爆防止） */
+  --update-banner-height: 36px;
+  --press-scale: 0.94;           /* 押下中の縮小率 */
+  --press-duration: 60ms;        /* 沈み込みの所要時間 */
+  --long-flash-duration: 120ms;  /* 長押し成立時のフラッシュ時間 */
+  --long-flash-width: 3px;       /* フラッシュの縁の太さ */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -62,6 +68,22 @@
   --color-button-fg: #000000;
   --color-button-active-bg: #808080;
   --color-button-active-fg: #ffffff;
+
+  --color-cell-pressed: #b0b0b0;       /* 押下中のマスの背景（やや暗く） */
+  --color-long-flash: #ffe066;         /* 長押し成立時に縁が光る色 */
+
+  --color-footer-flag-bg: #b98484;     /* フラグモード時のフッター背景（彩度を抑えた赤系） */
+  --color-footer-flag-fg: #ffffff;
+  --color-footer-flag-bevel-light: #d9b3b3;
+  --color-footer-flag-bevel-dark: #7a4f4f;
+
+  --color-status-bar-bg: #000000;      /* ステータスバー裏の帯（白い時計表示を読めるようにする） */
+
+  --color-banner-bg: #2b2b2b;
+  --color-banner-fg: #ffffff;
+  --color-banner-accent: #ffe066;
+
+  --color-overlay: rgba(0, 0, 0, 0.45);
 }
 
 /* ---------- ベース ---------- */
@@ -128,13 +150,66 @@ button {
 .header {
   height: calc(var(--header-height) + var(--safe-top));
   padding-top: var(--safe-top);
+  /* ステータスバーの裏（セーフエリア上部）だけ暗くする。
+     black-translucent 指定では時計や電池の文字が白になるため、灰色の上では読めない */
+  background: linear-gradient(
+    var(--color-status-bar-bg) var(--safe-top),
+    var(--color-panel) var(--safe-top)
+  );
   box-shadow: inset 0 -2px 0 var(--color-bevel-dark);
+}
+
+/* 更新検知バナー：表示中はこちらがセーフエリア上部を受け持ち、ヘッダー側の余白は 0 にする */
+.update-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: calc(var(--update-banner-height) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  font-size: 14px;
+  background: var(--color-banner-bg);
+  color: var(--color-banner-fg);
+  touch-action: manipulation;
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+.update-banner-action {
+  color: var(--color-banner-accent);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.app.has-update {
+  --safe-top: 0px;
+}
+
+/* 盤面とフッターの間の余白。下端に区切り線を引く */
+.footer-gap {
+  flex: 0 0 auto;
+  height: var(--footer-gap);
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-bevel-dark);
+  touch-action: none;
 }
 
 .footer {
   height: calc(var(--footer-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  box-shadow: inset 0 2px 0 var(--color-bevel-light);
+  box-shadow: inset 0 1px 0 var(--color-bevel-light);
+  transition: background-color 120ms ease-out;
+}
+
+/* フラグモード：フッターの背景色そのものを変え、視野の端でも状態が分かるようにする */
+.footer[data-mode="flag"] {
+  background: var(--color-footer-flag-bg);
+  color: var(--color-footer-flag-fg);
+  box-shadow: inset 0 1px 0 var(--color-footer-flag-bevel-light);
 }
 
 .main {
@@ -144,8 +219,7 @@ button {
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;        /* 端でのバウンスと、親へのスクロール連鎖を抑制 */
   touch-action: pan-y;              /* 縦スクロールのみ許可。横スクロール・ズームは不可 */
 }
 
@@ -305,11 +379,36 @@ button {
   border-bottom-color: transparent;
 }
 
-/* 押している最中は平坦にへこませる */
-.cell.hidden.pressed {
-  border: 1px solid var(--color-cell-border);
-  border-right-color: transparent;
-  border-bottom-color: transparent;
+/* 沈み込み：ベベルを反転し、わずかに縮小して背景を暗くする（常時有効・設定でオフにしない） */
+.cell {
+  transition: transform var(--press-duration) ease-out,
+              background-color var(--press-duration) ease-out;
+}
+
+.cell.hidden.pressed,
+.cell.flag.pressed {
+  background: var(--color-cell-pressed);
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  transform: scale(var(--press-scale));
+}
+
+/* 長押し成立時のフラッシュ：指で隠れる中心ではなく、マスの周縁だけを一瞬明るく光らせる */
+.cell.long-flash {
+  z-index: 1;
+}
+
+.cell.long-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: var(--long-flash-width) solid var(--color-long-flash);
+  pointer-events: none;
+  animation: long-flash var(--long-flash-duration) ease-out forwards;
+}
+
+@keyframes long-flash {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
 /* 開放済み：平坦で、細い暗色の枠線（左上のみ） */
@@ -349,29 +448,114 @@ button {
 /* アイコンの色は index.html の <symbol> 内で CSS 変数（--color-flag 等）を参照している。
    <use> の複製内には CSS セレクタが届かないので、ここでは形状ごとの色指定を書かない。 */
 
-/* ---------- フッター（暫定：難易度切替） ---------- */
+/* ---------- フッター（モード切替ボタン） ---------- */
 
-.difficulty-bar {
+/* フッターの横幅いっぱいを占める大きなボタン。背景はフッター側の色をそのまま透かす */
+.mode-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
   height: var(--footer-height);
+  color: inherit;
+  touch-action: manipulation;
+}
+
+.mode-toggle:active {
+  filter: brightness(0.9);
+}
+
+.mode-label {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mode-hint {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+/* ---------- 簡易設定（暫定） ---------- */
+
+.settings {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  padding: 24px;
+  background: var(--color-overlay);
+  touch-action: none;
 }
 
-.diff-btn {
-  min-width: 72px;
-  height: 32px;
-  padding: 0 12px;
+.settings[hidden] {
+  display: none;
+}
+
+.settings-panel {
+  width: 100%;
+  max-width: 340px;
+  padding: 16px;
+  background: var(--color-panel);
+  color: var(--color-ui-fg);
+  border: 3px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+}
+
+.settings-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
   font-size: 14px;
+}
+
+.settings-value {
+  font-variant-numeric: tabular-nums;
+  min-width: 5ch;
+  text-align: right;
+}
+
+.settings-range {
+  width: 100%;
+  margin: 4px 0 16px;
+}
+
+.settings-try {
+  margin-top: 12px;
+}
+
+/* 試し押し用のダミーマス。盤面と同じ見た目にするため .board / .cell をそのまま使う */
+.dummy-board {
+  --cols: 1;
+  --rows: 1;
+  --cell-size: 44px;
+  flex: 0 0 auto;
+}
+
+.settings-close {
+  display: block;
+  width: 100%;
+  height: 40px;
+  margin-top: 16px;
+  font-size: 15px;
   background: var(--color-button-bg);
   color: var(--color-button-fg);
   border: 2px solid;
   border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
 }
 
-.diff-btn[aria-pressed="true"] {
-  background: var(--color-button-active-bg);
-  color: var(--color-button-active-fg);
+.settings-close:active {
   border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
 }

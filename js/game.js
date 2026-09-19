@@ -188,6 +188,35 @@ export class Game {
     return { changed };
   }
 
+  /** 周囲 8 マスに立っている旗の数 */
+  countAdjacentFlags(index) {
+    let count = 0;
+    for (const n of this.neighbors(index)) count += this.flagged[n];
+    return count;
+  }
+
+  /**
+   * チョーディング。開放済みの数字マスに対して、周囲の旗の数が数字と一致するとき、
+   * 周囲の未開放マス（旗のないもの）を一斉に開放する。
+   * 旗の位置が誤っていれば地雷を踏んで敗北する（仕様通り。警告は出さない）。
+   * @returns {{changed:number[]}} 表示を更新すべきマスの添字
+   */
+  chord(index) {
+    if (this.isOver) return { changed: [] };
+    if (!this.revealed[index] || this.adjacent[index] === 0) return { changed: [] };
+    if (this.countAdjacentFlags(index) !== this.adjacent[index]) return { changed: [] };
+
+    const changed = [];
+    for (const n of this.neighbors(index)) {
+      if (this.revealed[n] || this.flagged[n]) continue;
+      const result = this.reveal(n);
+      changed.push(...result.changed);
+      // 地雷を踏んだ / 勝利した時点で全マスが返ってくるので、それ以上は不要
+      if (this.isOver) return { changed: this.allIndices() };
+    }
+    return { changed };
+  }
+
   /**
    * 旗を立てる / 外す。旗の数に上限はない。
    * @returns {boolean} 状態が変わったか

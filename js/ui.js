@@ -1,13 +1,25 @@
 // UI 層。DOM 操作・イベント処理・描画を担当する。ゲームのルールは game.js に任せる。
 
 import { Game, GameState, DIFFICULTIES, DEFAULT_DIFFICULTY } from './game.js';
+import { createIcon, flashCell } from './dom-utils.js';
+import { initSettings, getLongPressMs } from './settings.js';
 
 // ---------- 調整用の定数 ----------
-const LONG_PRESS_MS = 300;          // 長押しとみなす時間
-const LONG_PRESS_MOVE_LIMIT = 10;   // この距離（px）以上動いたら長押しをキャンセル
+// 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
 const TIMER_TICK_MS = 250;          // タイマー表示の更新間隔
 const LED_MAX = 999;                // 3 桁表示の上限
 const STORAGE_KEY_DIFFICULTY = 'ms-difficulty';
+
+/** 操作モード。開放モードが既定 */
+const Mode = Object.freeze({ REVEAL: 'reveal', FLAG: 'flag' });
+
+/** URL の ?level= に受け付ける値 → 難易度キー（advanced は上級の別名） */
+const LEVEL_PARAM_ALIASES = Object.freeze({
+  beginner: 'beginner',
+  intermediate: 'intermediate',
+  advanced: 'expert',
+  expert: 'expert',
+});
 
 // ---------- DOM 参照 ----------
 const boardEl = document.getElementById('board');
@@ -16,14 +28,19 @@ const mainEl = document.getElementById('main');
 const mineCounterEl = document.getElementById('mine-counter');
 const timerEl = document.getElementById('timer');
 const smileyEl = document.getElementById('smiley');
-const difficultyBarEl = document.getElementById('difficulty-bar');
+const footerEl = document.getElementById('footer');
+const modeToggleEl = document.getElementById('mode-toggle');
+const modeLabelEl = document.getElementById('mode-label');
+const modeHintEl = document.getElementById('mode-hint');
 
 // ---------- 状態 ----------
 let game = null;
 let difficultyKey = DEFAULT_DIFFICULTY;
+let mode = Mode.REVEAL;
 let cellEls = [];          // 添字 → セル要素
+let boardMetrics = null;   // 当たり判定用 { cellSize, frameLeft, frameTop }（fitBoard が更新）
 let timerHandle = null;
-let press = null;          // 押下中の情報 { index, x, y, timer, longFired, pointerId }
+let press = null;          // 押下中の情報（下記 startPress を参照）
 
 // ---------- 永続化 ----------
 
@@ -39,6 +56,21 @@ function saveDifficulty(key) {
   try {
     localStorage.setItem(STORAGE_KEY_DIFFICULTY, key);
   } catch (_) { /* 無視 */ }
+}
+
+/**
+ * 起動時の難易度を決める。
+ * URL の ?level= があればそれを採用して保存する（ホーム画面起動でも次回から効くようにするため）。
+ * なければ保存済みの値、それもなければ初級。
+ */
+function resolveStartupDifficulty() {
+  const param = new URLSearchParams(location.search).get('level');
+  const key = param ? LEVEL_PARAM_ALIASES[param.toLowerCase()] : null;
+  if (key) {
+    saveDifficulty(key);
+    return key;
+  }
+  return loadDifficulty();
 }
 
 // ---------- 3 桁表示 ----------
@@ -88,17 +120,6 @@ function updateFaceFromState() {
 }
 
 // ---------- 盤面の生成と描画 ----------
-
-/** SVG シンボルを参照する <svg><use> を生成する */
-function createIcon(symbolId, className) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'icon ' + className);
-  svg.setAttribute('aria-hidden', 'true');
-  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', '#' + symbolId);
-  svg.appendChild(use);
-  return svg;
-}
 
 function buildBoard() {
   boardEl.innerHTML = '';
@@ -171,6 +192,23 @@ function fitBoard() {
   if (boardEl.style.getPropertyValue('--cell-size') !== value) {
     boardEl.style.setProperty('--cell-size', value);
   }
+  // 当たり判定用に、マスの大きさと外枠の太さを覚えておく
+  boardMetrics = {
+    cellSize,
+    frameLeft: parseFloat(boardStyle.borderLeftWidth) + parseFloat(boardStyle.paddingLeft),
+    frameTop: parseFloat(boardStyle.borderTopWidth) + parseFloat(boardStyle.paddingTop),
+  };
+  updateTouchAction();
+}
+
+/**
+ * 盤面が縦にはみ出さないときはブラウザにスクロールを一切渡さない（touch-action: none）。
+ * こうしないと、指を上下に動かして狙いを修正しただけで押下がキャンセルされてしまう。
+ * はみ出すとき（上級）だけ縦スクロールを許可する。
+ */
+function updateTouchAction() {
+  const overflows = boardWrapEl.offsetHeight > mainEl.clientHeight;
+  boardEl.style.touchAction = overflows ? 'pan-y' : 'none';
 }
 
 // ---------- ゲームの開始 ----------
@@ -185,22 +223,31 @@ function newGame(key) {
   updateMineCounter();
   updateTimer();
   setFace('normal');
-  updateDifficultyButtons();
   mainEl.scrollTop = 0;
 }
 
-function updateDifficultyButtons() {
-  for (const btn of difficultyBarEl.querySelectorAll('.diff-btn')) {
-    btn.setAttribute('aria-pressed', btn.dataset.difficulty === difficultyKey ? 'true' : 'false');
+// ---------- モード切替 ----------
+
+function setMode(next) {
+  mode = next;
+  footerEl.dataset.mode = mode;
+  if (mode === Mode.FLAG) {
+    modeLabelEl.textContent = 'フラグモード';
+    modeHintEl.textContent = 'タップ = 旗 ／ 長押し = 開放';
+  } else {
+    modeLabelEl.textContent = '開放モード';
+    modeHintEl.textContent = 'タップ = 開放 ／ 長押し = 旗';
   }
+}
+
+function toggleMode() {
+  setMode(mode === Mode.REVEAL ? Mode.FLAG : Mode.REVEAL);
 }
 
 // ---------- 操作の適用 ----------
 
-function doReveal(index) {
-  const { changed } = game.reveal(index);
+function applyResult(changed) {
   if (changed.length === 0) return;
-
   if (game.startTime !== null && timerHandle === null && !game.isOver) startTimerTick();
 
   renderCells(changed);
@@ -210,74 +257,155 @@ function doReveal(index) {
   if (game.isOver) stopTimerTick();
 }
 
+function doReveal(index) {
+  applyResult(game.reveal(index).changed);
+}
+
+function doChord(index) {
+  applyResult(game.chord(index).changed);
+}
+
 function doToggleFlag(index) {
   if (!game.toggleFlag(index)) return;
   renderCell(index);
   updateMineCounter();
 }
 
-// ---------- 押下（タップ / 長押し）の処理 ----------
+/** タップ（指を離したとき）の動作。開放済みの数字マスはモードに関係なくチョーディング */
+function tapAction(index) {
+  if (game.revealed[index]) {
+    doChord(index);
+  } else if (mode === Mode.FLAG) {
+    doToggleFlag(index);
+  } else if (!game.flagged[index]) {
+    doReveal(index);
+  }
+}
 
-function cellIndexFromEvent(event) {
-  const cell = event.target.closest('.cell');
-  if (!cell || !boardEl.contains(cell)) return -1;
-  return Number(cell.dataset.i);
+/** 長押し成立時の動作。開放済みのマスには何もしない */
+function longPressAction(index) {
+  if (game.revealed[index]) return;
+  if (mode === Mode.FLAG) {
+    if (!game.flagged[index]) doReveal(index);
+  } else {
+    doToggleFlag(index);
+  }
+}
+
+// ---------- 押下（タップ / 長押し）の処理 ----------
+//
+// 指を触れた時点では確定せず、指の下のマスをハイライトするだけ。
+// 指を動かせばハイライトが追従し、離した時点で初めて確定する。
+// 盤面の外で離した場合はキャンセル。長押しは「同じマスに触れ続けた時間」で判定する。
+
+/**
+ * 画面座標からセルの添字を求める。盤面の外なら -1。
+ * elementFromPoint は使わない。押下中のマスは縮小表示されるため、縁の部分で
+ * 「どのマスにも当たらない」判定になり、タップが取りこぼされてしまうから。
+ * 代わりに盤面の位置とマスの大きさから計算で求める。
+ */
+function cellIndexAtPoint(x, y) {
+  if (!boardMetrics) return -1;
+  const rect = boardEl.getBoundingClientRect();
+  const col = Math.floor((x - rect.left - boardMetrics.frameLeft) / boardMetrics.cellSize);
+  const row = Math.floor((y - rect.top - boardMetrics.frameTop) / boardMetrics.cellSize);
+  if (col < 0 || col >= game.cols || row < 0 || row >= game.rows) return -1;
+  // 盤面がスクロールで見切れている部分（ヘッダーやフッターの裏）は盤面外として扱う
+  const mainRect = mainEl.getBoundingClientRect();
+  if (y < mainRect.top || y >= mainRect.bottom) return -1;
+  return game.toIndex(col, row);
+}
+
+/** 押下ハイライトの対象。数字マスならチョーディング対象（周囲の未開放マス）を沈める */
+function highlightTargets(index) {
+  if (index < 0) return [];
+  if (!game.revealed[index]) return [index];
+  if (game.adjacent[index] === 0) return [];
+  return game.neighbors(index).filter((n) => !game.revealed[n] && !game.flagged[n]);
+}
+
+function setHighlight(indices) {
+  for (const i of press.highlighted) cellEls[i].classList.remove('pressed');
+  for (const i of indices) cellEls[i].classList.add('pressed');
+  press.highlighted = indices;
+}
+
+function stopLongPressTimer() {
+  if (press && press.timer !== null) {
+    clearTimeout(press.timer);
+    press.timer = null;
+  }
+}
+
+/** 現在のマスに対する長押しタイマーを（再）開始する。開放済みのマスでは開始しない */
+function restartLongPressTimer() {
+  stopLongPressTimer();
+  const index = press.index;
+  if (index < 0 || game.revealed[index]) return;
+  const current = press;
+  current.timer = setTimeout(() => {
+    if (press !== current) return;
+    current.timer = null;
+    current.longFired = true;
+    setHighlight([]);
+    longPressAction(index);
+    flashCell(cellEls[index]);
+    if (!game.isOver) setFace('normal');
+  }, getLongPressMs());
+}
+
+/** 指の下のマスが変わったときの処理。ハイライトを移し、長押しの計時をやり直す */
+function movePressTo(index) {
+  if (index === press.index) return;
+  press.index = index;
+  setHighlight(highlightTargets(index));
+  restartLongPressTimer();
 }
 
 function clearPress() {
   if (!press) return;
-  clearTimeout(press.timer);
-  cellEls[press.index]?.classList.remove('pressed');
+  stopLongPressTimer();
+  setHighlight([]);
   press = null;
   if (game && !game.isOver) setFace('normal');
 }
 
 function onPointerDown(event) {
-  // 前回の押下が残っていれば（ウィンドウ外で離した等）先に片付ける
+  // 押下中に別の指が触れても無視する（親指で長押し中に他の指がかすっても取り消さない）
+  if (press && event.pointerId !== press.pointerId) return;
+  // 同じポインタの前回の押下が残っていれば（ウィンドウ外で離した等）先に片付ける
   clearPress();
 
   if (game.isOver) return;
   if (event.pointerType === 'mouse' && event.button !== 0) return;
-  const index = cellIndexFromEvent(event);
-  if (index < 0 || game.revealed[index]) return;
+  const index = cellIndexAtPoint(event.clientX, event.clientY);
+  if (index < 0) return;
 
-  const current = {
-    index,
+  press = {
     pointerId: event.pointerId,
-    x: event.clientX,
-    y: event.clientY,
-    longFired: false,
+    index: -1,           // movePressTo で設定する
+    highlighted: [],
     timer: null,
+    longFired: false,
   };
-  current.timer = setTimeout(() => {
-    // 長押し成立：旗を立てる / 外す。別の押下に切り替わっていたら何もしない
-    if (press !== current) return;
-    current.longFired = true;
-    cellEls[current.index].classList.remove('pressed');
-    doToggleFlag(current.index);
-    setFace('normal');
-  }, LONG_PRESS_MS);
-  press = current;
-
-  if (!game.flagged[index]) cellEls[index].classList.add('pressed');
+  movePressTo(index);
   setFace('pressed');
 }
 
 function onPointerMove(event) {
   if (!press || event.pointerId !== press.pointerId) return;
-  const dx = event.clientX - press.x;
-  const dy = event.clientY - press.y;
-  // 指が動きすぎたらキャンセル（スクロール操作を妨げない）
-  if (Math.hypot(dx, dy) >= LONG_PRESS_MOVE_LIMIT) clearPress();
+  if (press.longFired) return;   // 長押し確定後は指を動かしても何もしない
+  movePressTo(cellIndexAtPoint(event.clientX, event.clientY));
 }
 
 function onPointerUp(event) {
   if (!press || event.pointerId !== press.pointerId) return;
-  const { index, longFired } = press;
+  const { longFired } = press;
+  const index = cellIndexAtPoint(event.clientX, event.clientY);
   clearPress();
-  if (longFired) return;              // 長押し済みならタップとして扱わない
-  if (game.flagged[index]) return;    // 旗が立っているマスはタップで開放できない
-  doReveal(index);
+  if (longFired) return;        // 長押し済みならタップとして扱わない
+  if (index < 0) return;        // 盤面の外で離した → キャンセル
+  tapAction(index);
 }
 
 function onPointerCancel(event) {
@@ -292,22 +420,21 @@ window.addEventListener('pointermove', onPointerMove, { passive: true });
 window.addEventListener('pointerup', onPointerUp);
 window.addEventListener('pointercancel', onPointerCancel);
 
+// アプリが裏に回ったら押下を破棄する（復帰後に長押しタイマーが遅れて発火し、勝手に旗が立つのを防ぐ）
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) clearPress();
+});
+
 // 長押し時の iOS のコールアウトメニューやデスクトップの右クリックメニューを抑止
-boardEl.addEventListener('contextmenu', (event) => event.preventDefault());
+document.addEventListener('contextmenu', (event) => event.preventDefault());
 
 smileyEl.addEventListener('click', () => newGame(difficultyKey));
-
-difficultyBarEl.addEventListener('click', (event) => {
-  const btn = event.target.closest('.diff-btn');
-  if (!btn) return;
-  const key = btn.dataset.difficulty;
-  if (!DIFFICULTIES[key]) return;
-  saveDifficulty(key);
-  newGame(key);
-});
+modeToggleEl.addEventListener('click', toggleMode);
 
 // コンテナ幅が変わったらマスの大きさを計算し直す
 new ResizeObserver(() => fitBoard()).observe(mainEl);
 
 // ---------- 起動 ----------
-newGame(loadDifficulty());
+initSettings({ onOpen: clearPress });   // 設定を開くときは盤面の押下状態を片付ける
+setMode(Mode.REVEAL);
+newGame(resolveStartupDifficulty());

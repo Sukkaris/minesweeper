@@ -6,7 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Minesweeper">
+  <meta name="theme-color" content="#c0c0c0">
   <title>Minesweeper</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./css/style.css">
   <link rel="stylesheet" href="./css/themes.css">
 </head>
@@ -37,7 +42,13 @@
     </symbol>
   </svg>
 
-  <div class="app">
+  <div class="app" id="app">
+
+    <!-- 更新検知バナー：新しい Service Worker が待機中のときだけ表示する（pwa.js が制御） -->
+    <button class="update-banner" id="update-banner" type="button" hidden>
+      <span class="update-banner-text">新しいバージョンがあります</span>
+      <span class="update-banner-action">再読み込み</span>
+    </button>
 
     <!-- ヘッダー：残り地雷数・スマイリー・タイマーを中央、歯車は右端に絶対配置 -->
     <header class="header">
@@ -91,17 +102,42 @@
       </div>
     </main>
 
-    <!-- フッター：第1段階では難易度切替を暫定配置 -->
-    <footer class="footer">
-      <div class="difficulty-bar" id="difficulty-bar">
-        <button class="diff-btn" type="button" data-difficulty="beginner">初級</button>
-        <button class="diff-btn" type="button" data-difficulty="intermediate">中級</button>
-        <button class="diff-btn" type="button" data-difficulty="expert">上級</button>
-      </div>
+    <!-- 盤面とフッターの間の余白と区切り線（誤爆防止） -->
+    <div class="footer-gap"></div>
+
+    <!-- フッター：開放モード / フラグモードの切替ボタン1つだけ。背景色は data-mode で変わる -->
+    <footer class="footer" id="footer" data-mode="reveal">
+      <button class="mode-toggle" id="mode-toggle" type="button">
+        <span class="mode-label" id="mode-label" aria-live="polite">開放モード</span>
+        <span class="mode-hint" id="mode-hint">タップ = 開放 ／ 長押し = 旗</span>
+      </button>
     </footer>
 
   </div>
 
+  <!-- 簡易設定（第3段階で正式な設定画面に移す）：長押し時間の調整と試し押し -->
+  <div class="settings" id="settings" hidden>
+    <div class="settings-panel" role="dialog" aria-label="設定">
+      <h2 class="settings-title">設定（暫定）</h2>
+
+      <div class="settings-row">
+        <label class="settings-label" for="long-press-range">長押しの長さ</label>
+        <div class="settings-value" id="long-press-value">300 ms</div>
+      </div>
+      <input class="settings-range" id="long-press-range" type="range" min="200" max="600" step="50" value="300">
+
+      <div class="settings-row settings-try">
+        <div class="settings-label">試し押し（長押しで旗が立つ／外れる）</div>
+        <div class="board dummy-board" aria-hidden="true">
+          <div class="cell hidden" id="dummy-cell"></div>
+        </div>
+      </div>
+
+      <button class="settings-close" id="settings-close" type="button">閉じる</button>
+    </div>
+  </div>
+
   <script type="module" src="./js/ui.js"></script>
+  <script type="module" src="./js/pwa.js"></script>
 </body>
 </html>

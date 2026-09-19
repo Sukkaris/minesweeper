@@ -1,0 +1,31 @@
+{
+  "name": "Minesweeper",
+  "short_name": "Minesweeper",
+  "description": "iPhone 向けのマインスイーパー（オフライン対応 PWA）",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "./",
+  "scope": "./",
+  "theme_color": "#c0c0c0",
+  "background_color": "#c0c0c0",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

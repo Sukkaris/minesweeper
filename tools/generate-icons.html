@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>アイコン生成ツール</title>
+  <!--
+    開発用ツール。Service Worker のキャッシュ対象には含めない。
+    ../icons/icon.svg を読み込んで canvas に描き、3 サイズの PNG をダウンロードする。
+  -->
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; max-width: 720px; color: #222; }
+    h1 { font-size: 20px; }
+    .status { padding: 8px 12px; background: #eee; border-radius: 6px; margin: 12px 0; }
+    .status.error { background: #fde2e2; }
+    textarea { width: 100%; height: 160px; font-family: monospace; font-size: 12px; }
+    .previews { display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap; margin: 16px 0; }
+    .preview { text-align: center; }
+    canvas { display: block; border: 1px solid #ccc; background: #fff; margin: 0 auto 8px; }
+    button { font-size: 14px; padding: 8px 14px; cursor: pointer; }
+    .row { margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>アイコン生成ツール</h1>
+  <p>
+    <code>../icons/icon.svg</code> を読み込み、180×180 / 192×192 / 512×512 の PNG を作ります。
+    ダウンロードしたファイルは <code>icons/</code> フォルダに置いてください。
+  </p>
+
+  <div class="status" id="status">読み込み中…</div>
+
+  <div class="row">
+    <label for="svg-source">
+      fetch に失敗した場合（file:// で開いたときなど）は、ここに icon.svg の中身を貼り付けてください：
+    </label>
+    <textarea id="svg-source" spellcheck="false"></textarea>
+    <div class="row"><button type="button" id="apply-source">貼り付けた SVG を使う</button></div>
+  </div>
+
+  <div class="previews" id="previews"></div>
+
+  <div class="row">
+    <button type="button" id="download-all">3 サイズをまとめてダウンロード</button>
+  </div>
+
+  <script>
+    // 出力ファイル名とサイズの対応
+    const TARGETS = [
+      { name: 'apple-touch-icon.png', size: 180 },
+      { name: 'icon-192.png', size: 192 },
+      { name: 'icon-512.png', size: 512 },
+    ];
+
+    const statusEl = document.getElementById('status');
+    const sourceEl = document.getElementById('svg-source');
+    const previewsEl = document.getElementById('previews');
+    const canvases = new Map();   // name → canvas
+
+    function setStatus(text, isError) {
+      statusEl.textContent = text;
+      statusEl.className = 'status' + (isError ? ' error' : '');
+    }
+
+    /** SVG のソース文字列を Image として読み込む */
+    function loadSvgImage(svgText) {
+      return new Promise((resolve, reject) => {
+        const blob = new Blob([svgText], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG を画像として読み込めませんでした')); };
+        img.src = url;
+      });
+    }
+
+    /** 3 サイズの canvas を描画してプレビューに並べる */
+    async function renderAll(svgText) {
+      const img = await loadSvgImage(svgText);
+      previewsEl.innerHTML = '';
+      canvases.clear();
+
+      for (const target of TARGETS) {
+        const canvas = document.createElement('canvas');
+        canvas.width = target.size;
+        canvas.height = target.size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, target.size, target.size);
+        canvases.set(target.name, canvas);
+
+        const box = document.createElement('div');
+        box.className = 'preview';
+        // 画面上は 128px に縮小して表示（実データはフルサイズ）
+        canvas.style.width = '128px';
+        canvas.style.height = '128px';
+        box.appendChild(canvas);
+
+        const label = document.createElement('div');
+        label.textContent = `${target.name} (${target.size}×${target.size})`;
+        box.appendChild(label);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'ダウンロード';
+        btn.addEventListener('click', () => download(target.name));
+        box.appendChild(btn);
+
+        previewsEl.appendChild(box);
+      }
+      setStatus('描画できました。ダウンロードボタンで PNG を保存してください。', false);
+    }
+
+    function download(name) {
+      const canvas = canvases.get(name);
+      if (!canvas) return;
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    document.getElementById('download-all').addEventListener('click', () => {
+      // 連続クリック扱いされないよう、少し間隔を空けて順に保存する
+      TARGETS.forEach((t, i) => setTimeout(() => download(t.name), i * 300));
+    });
+
+    document.getElementById('apply-source').addEventListener('click', () => {
+      const text = sourceEl.value.trim();
+      if (!text) { setStatus('SVG のソースが空です', true); return; }
+      renderAll(text).catch((err) => setStatus(err.message, true));
+    });
+
+    // 起動時：icon.svg を fetch で読む。失敗したらテキストエリアでの手動入力に切り替える
+    (async () => {
+      try {
+        const res = await fetch('../icons/icon.svg');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        sourceEl.value = text;
+        await renderAll(text);
+      } catch (err) {
+        setStatus('icon.svg を自動で読み込めませんでした（' + err.message + '）。' +
+                  '下のテキストエリアに SVG を貼り付けて「貼り付けた SVG を使う」を押してください。', true);
+      }
+    })();
+  </script>
+</body>
+</html>
