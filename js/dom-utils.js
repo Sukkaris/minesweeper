@@ -1,6 +1,6 @@
 // DOM まわりの小道具。ui.js と settings.js の両方から使う。
 
-const LONG_FLASH_MS = 150;   // 長押し成立フラッシュのクラスを付けておく時間（CSS の時間より少し長め）
+const LONG_FLASH_MS = 280;   // 長押し成立フラッシュのクラスを付けておく時間（CSS の --long-flash-duration より少し長め）
 
 /** SVG シンボルを参照する <svg><use> を生成する */
 export function createIcon(symbolId, className) {

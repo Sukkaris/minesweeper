@@ -23,7 +23,7 @@
   --update-banner-height: 36px;
   --press-scale: 0.94;           /* 押下中の縮小率 */
   --press-duration: 60ms;        /* 沈み込みの所要時間 */
-  --long-flash-duration: 120ms;  /* 長押し成立時のフラッシュ時間 */
+  --long-flash-duration: 250ms;  /* 長押し成立時のフラッシュ時間 */
   --long-flash-width: 3px;       /* フラッシュの縁の太さ */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -70,7 +70,7 @@
   --color-button-active-fg: #ffffff;
 
   --color-cell-pressed: #b0b0b0;       /* 押下中のマスの背景（やや暗く） */
-  --color-long-flash: #ffe066;         /* 長押し成立時に縁が光る色 */
+  --color-long-flash: #ff7a00;         /* 長押し成立時に縁が光る色（灰色の上で目立つ濃いオレンジ） */
 
   --color-footer-flag-bg: #b98484;     /* フラグモード時のフッター背景（彩度を抑えた赤系） */
   --color-footer-flag-fg: #ffffff;
