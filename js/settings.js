@@ -12,12 +12,14 @@ import {
 import { createIcon, sinkCell, openSheet, closeSheet, isSheetOpen } from './dom-utils.js';
 import { loadSettingsRaw, saveSettingsData, mergeDefaults } from './storage.js';
 import { initStatsScreen, openStats } from './stats-screen.js';
+import { isHighDensity } from './solver.js';
 
 // ---------- 調整用の定数 ----------
 const LONG_PRESS_DEFAULT_MS = 300;  // 長押しとみなす時間の既定値
 const LONG_PRESS_MIN_MS = 200;
 const LONG_PRESS_MAX_MS = 600;
 const LONG_PRESS_STEP_MS = 50;
+const NO_GUESS_DEFAULT_ON_SCHEMA = 2;   // 無推測モードの既定をオンにした設定スキーマの版（移行判定用）
 
 /** テーマ一覧。第5段階で増やす。選択肢はこの配列から生成する */
 const THEMES = Object.freeze([
@@ -27,7 +29,8 @@ const THEMES = Object.freeze([
 const DEFAULT_SETTINGS = Object.freeze({
   difficulty: DEFAULT_DIFFICULTY,
   theme: THEMES[0].key,
-  noGuess: false,            // 無推測モード（第4段階で機能を実装）
+  noGuess: true,             // 無推測モード（既定オン）
+  customHighDensityNoGuess: false,   // 高密度カスタムでも無推測モードを使うか（既定オフ。明示的にオンへ戻せる）
   longPressMs: LONG_PRESS_DEFAULT_MS,
   effects: true,             // 視覚演出（第5段階で機能を実装）
   sound: false,              // サウンド（第5段階で機能を実装）
@@ -39,6 +42,7 @@ const SETTINGS_VALIDATORS = {
   difficulty: (v) => v === CUSTOM_KEY || Object.prototype.hasOwnProperty.call(DIFFICULTIES, v),
   theme: (v) => THEMES.some((t) => t.key === v),
   noGuess: isBool,
+  customHighDensityNoGuess: isBool,
   longPressMs: (v) => Number.isFinite(v) && v >= LONG_PRESS_MIN_MS && v <= LONG_PRESS_MAX_MS,
   effects: isBool,
   sound: isBool,
@@ -58,6 +62,8 @@ const customDensityEl = document.getElementById('custom-density');
 const customStartEl = document.getElementById('custom-start');
 const themeGroupEl = document.getElementById('theme-group');
 const noGuessEl = document.getElementById('toggle-no-guess');
+const customHighDensityEl = document.getElementById('custom-high-density');
+const customNoGuessEl = document.getElementById('toggle-custom-no-guess');
 const effectsEl = document.getElementById('toggle-effects');
 const soundEl = document.getElementById('toggle-sound');
 const longPressRangeEl = document.getElementById('long-press-range');
@@ -75,8 +81,14 @@ let dummyFlagged = false;
 // ---------- 永続化 ----------
 
 function loadSettings() {
-  const merged = mergeDefaults(DEFAULT_SETTINGS, loadSettingsRaw(), SETTINGS_VALIDATORS);
+  const raw = loadSettingsRaw();
+  const merged = mergeDefaults(DEFAULT_SETTINGS, raw, SETTINGS_VALIDATORS);
   merged.custom = clampCustomConfig(merged.custom);
+  // 第3段階（設定スキーマ 1）では無推測モードが「準備中」で既定オフだった。
+  // 機能の実装（スキーマ 2）に伴い既定をオンにしたので、スキーマ 2 未満の保存値は引き継がず既定値に戻す
+  if (raw && !(raw.schemaVersion >= NO_GUESS_DEFAULT_ON_SCHEMA)) {
+    merged.noGuess = DEFAULT_SETTINGS.noGuess;
+  }
   return merged;
 }
 
@@ -103,6 +115,15 @@ export function getLongPressMs() {
 /** カスタム難易度の現在の入力内容（範囲内に丸めた値） */
 export function getCustomConfig() {
   return { key: CUSTOM_KEY, label: CUSTOM_LABEL, ...settings.custom };
+}
+
+/**
+ * この盤面設定で無推測モードを使うか。
+ * 高密度（solver.js の閾値超）では、通常のトグルに加えてカスタム入力欄の専用トグル（既定オフ）もオンである必要がある
+ */
+export function isNoGuessEnabled(config) {
+  if (!settings.noGuess) return false;
+  return isHighDensity(config) ? settings.customHighDensityNoGuess : true;
 }
 
 // ---------- シートの開閉 ----------
@@ -178,10 +199,15 @@ function renderCustomInputs() {
   renderDensity(settings.custom);
 }
 
-/** 地雷密度（地雷数 ÷ 総マス数）を常時表示する */
-function renderDensity({ cols, rows, mines }) {
-  const percent = (mines / (cols * rows)) * 100;
+/**
+ * 地雷密度（地雷数 ÷ 総マス数）を常時表示する。
+ * 高密度なら「無推測モードは既定で無効」の注意書きと、それでも使うためのトグルを出す
+ * （無推測モード自体がオフなら関係ないので出さない）
+ */
+function renderDensity(config) {
+  const percent = (config.mines / (config.cols * config.rows)) * 100;
   customDensityEl.textContent = percent.toFixed(1) + '%';
+  customHighDensityEl.hidden = !(settings.noGuess && isHighDensity(config));
 }
 
 /** 入力欄の現在値を範囲内に丸めた設定値として読む */
@@ -301,8 +327,11 @@ export function initSettings(options = {}) {
   });
   applyTheme(settings.theme);
 
-  // トグル類（この段階では保存のみ。機能は後の段階で実装）
+  // トグル類（視覚演出・サウンドは保存のみ。機能は第5段階で実装）
   bindToggle(noGuessEl, 'noGuess');
+  bindToggle(customNoGuessEl, 'customHighDensityNoGuess');
+  // 無推測モードを切り替えたら、カスタム欄の高密度の注意書きの表示も合わせる
+  noGuessEl.addEventListener('change', () => renderDensity(readCustomInputs()));
   bindToggle(effectsEl, 'effects');
   bindToggle(soundEl, 'sound');
 

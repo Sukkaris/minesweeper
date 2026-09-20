@@ -85,6 +85,13 @@
 
   --color-overlay: rgba(0, 0, 0, 0.45);
 
+  /* --- 盤面上の通知（生成中の表示・一行トースト） --- */
+  --notice-top: 10px;                  /* 盤面領域の上端からの距離 */
+  --notice-duration: 180ms;            /* トーストの出入りの時間 */
+  --color-notice-bg: rgba(43, 43, 43, 0.92);
+  --color-notice-fg: #ffffff;
+  --generating-opacity: 0.55;          /* 無推測の盤面を生成中の盤面の薄さ */
+
   /* --- 設定画面・統計画面（settings.css が参照） --- */
   --sheet-duration: 260ms;             /* シートがせり上がる時間 */
   --sheet-header-height: 50px;
@@ -339,6 +346,84 @@ button {
 .gear .gear-teeth rect,
 .gear .gear-ring { fill: var(--color-ui-fg); }
 .gear .gear-hole  { fill: var(--color-panel); }
+
+/* ---------- 盤面上の通知 ---------- */
+
+/* 高さ 0 の sticky 要素を .main の先頭に置き、その中に通知を絶対配置する。
+   .main はスクロールするので、単純な絶対配置だと盤面と一緒に流れてしまう */
+.notice-anchor {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 0;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.notice {
+  position: absolute;
+  top: var(--notice-top);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 2 * var(--board-gap) - 16px);
+  padding: 8px 14px;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--color-notice-bg);
+  color: var(--color-notice-fg);
+  border: 2px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+  pointer-events: none;
+}
+
+.notice-loading[hidden] {
+  display: none;
+}
+
+/* 生成中の表示：文の前で小さな四角が回る（画像や外部フォントを使わない） */
+.notice-loading::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 2px solid var(--color-notice-fg);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: notice-spin 0.8s linear infinite;
+}
+
+@keyframes notice-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* トースト：普段は透明。.show で表示され、数秒後にまた消える（notice.js が制御） */
+.notice-toast {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--notice-duration) ease-out,
+              visibility 0s linear var(--notice-duration);
+}
+
+.notice-toast.show {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--notice-duration) ease-out,
+              visibility 0s;
+}
+
+/* 無推測の盤面を生成中は盤面を薄くして、操作を受け付けないことを示す */
+.board {
+  transition: opacity var(--notice-duration) ease-out;
+}
+
+.board.generating {
+  opacity: var(--generating-opacity);
+}
 
 /* ---------- 盤面 ---------- */
 

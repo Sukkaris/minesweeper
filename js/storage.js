@@ -10,7 +10,7 @@
 export const SCHEMA_VERSION = Object.freeze({
   game: 1,
   stats: 1,
-  settings: 1,
+  settings: 2,   // 2: 無推測モードの既定をオンに変更（第4段階）。1 からの引き継ぎは settings.js が行う
 });
 
 const KEY_GAME = 'ms-game';

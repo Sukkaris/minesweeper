@@ -98,6 +98,11 @@
 
     <!-- 盤面：縦方向にはみ出す場合のみこの領域内でスクロールする -->
     <main class="main" id="main">
+      <!-- 盤面の上端に貼り付く通知（高さ 0 の sticky）。スクロールしても盤面領域の上に出続ける -->
+      <div class="notice-anchor" aria-live="polite">
+        <div class="notice notice-loading" id="board-loading" hidden>盤面を生成中…</div>
+        <div class="notice notice-toast" id="toast" role="status"></div>
+      </div>
       <div class="board-wrap" id="board-wrap">
         <div class="board" id="board" role="grid"></div>
       </div>
@@ -157,6 +162,17 @@
             地雷密度 <strong id="custom-density">12.3%</strong>
             <span class="custom-density-hint">（20% 前後が快適です）</span>
           </p>
+          <!-- 高密度（solver.js の閾値超）のときだけ表示。無推測は既定で無効だが、明示的にオンへ戻せる -->
+          <div class="custom-high-density" id="custom-high-density" hidden>
+            <p class="settings-note custom-high-density-note">密度が高いため無推測モードは既定で無効です</p>
+            <label class="toggle-row">
+              <span class="toggle-text">
+                <span class="toggle-label">それでも無推測モードを使う</span>
+                <span class="toggle-note">試行を 100 回に抑え、見つからなければ通常の盤面で始めます</span>
+              </span>
+              <input class="toggle" id="toggle-custom-no-guess" type="checkbox">
+            </label>
+          </div>
           <button class="btn btn-primary" id="custom-start" type="button">この設定で始める</button>
         </div>
       </section>
@@ -167,12 +183,12 @@
         <div class="choice-group" id="theme-group"></div>
       </section>
 
-      <!-- 3. 無推測モード（第4段階で機能を実装。ここでは保存のみ） -->
+      <!-- 3. 無推測モード（既定オン。次のゲームの初手から効く） -->
       <section class="settings-section">
         <label class="toggle-row">
           <span class="toggle-text">
             <span class="toggle-label">無推測モード</span>
-            <span class="toggle-note">運に頼らず解ける盤面だけを出します（準備中）</span>
+            <span class="toggle-note">運に頼らず論理だけで解ける盤面を出します</span>
           </span>
           <input class="toggle" id="toggle-no-guess" type="checkbox">
         </label>

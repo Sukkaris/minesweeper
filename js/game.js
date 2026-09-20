@@ -159,11 +159,13 @@ export class Game {
   // ---------- 地雷配置 ----------
 
   /**
-   * 最初のタップを受けてから地雷を配置する。
+   * 初手を避けたランダムな地雷配置を作る（盤面には反映しない）。
    * 最初にタップしたマスとその周囲 8 マスには地雷を置かない。
    * 地雷が多すぎて満たせない場合は、安全マスを段階的に減らす。
+   * 無推測モードはこれを何度も呼んで、ソルバーで解ける配置を探す。
+   * @returns {Uint8Array} 1 = 地雷
    */
-  placeMines(firstIndex) {
+  createMineLayout(firstIndex) {
     let safe = new Set([firstIndex, ...this.neighbors(firstIndex)]);
 
     // 安全マスを除いた候補が足りなければ、最初のマスだけを安全にする
@@ -181,13 +183,24 @@ export class Game {
     }
 
     // Fisher–Yates の部分シャッフルで先頭 totalMines 個を選ぶ
+    const layout = new Uint8Array(this.totalCells);
     for (let i = 0; i < this.totalMines; i++) {
       const j = i + Math.floor(Math.random() * (candidates.length - i));
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-      this.mine[candidates[i]] = 1;
+      layout[candidates[i]] = 1;
     }
+    return layout;
+  }
 
+  /** 地雷配置を盤面に反映し、周囲の地雷数を数える */
+  applyMineLayout(layout) {
+    this.mine = layout;
     this.computeAdjacent();
+  }
+
+  /** 最初のタップを受けてから地雷を配置する（通常モード） */
+  placeMines(firstIndex) {
+    this.applyMineLayout(this.createMineLayout(firstIndex));
   }
 
   /** 各マスの周囲の地雷数を数え直す（配置時と復元時に使う） */
@@ -204,14 +217,18 @@ export class Game {
 
   /**
    * マスを開放する。
+   * @param {number} index
+   * @param {Uint8Array|null} [layout] 初手のとき、あらかじめ用意した地雷配置（無推測モードが渡す）。
+   *   省略するとその場でランダムに配置する
    * @returns {{changed:number[]}} 表示を更新すべきマスの添字
    */
-  reveal(index) {
+  reveal(index, layout = null) {
     if (this.isOver) return { changed: [] };
     if (this.revealed[index] || this.flagged[index]) return { changed: [] };
 
     if (this.state === GameState.READY) {
-      this.placeMines(index);
+      if (layout) this.applyMineLayout(layout);
+      else this.placeMines(index);
       this.state = GameState.PLAYING;
       this.resume();
     }

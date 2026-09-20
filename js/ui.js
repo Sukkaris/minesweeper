@@ -1,18 +1,21 @@
 // UI 層。DOM 操作・イベント処理・描画を担当する。ゲームのルールは game.js に任せる。
+// 盤面の押下（タップ / 長押し）の判定は press.js に分けてある。
 
 import { Game, GameState, DIFFICULTIES, CUSTOM_KEY } from './game.js';
-import { createIcon, sinkCell, installZoomGuards } from './dom-utils.js';
+import { createIcon, installZoomGuards } from './dom-utils.js';
 import { fitBoardToContainer } from './board-layout.js';
 import {
-  initSettings, getLongPressMs, getSetting, setSetting, getCustomConfig, isSettingsOpen,
+  initSettings, getLongPressMs, getSetting, setSetting, getCustomConfig, isSettingsOpen, isNoGuessEnabled,
 } from './settings.js';
 import { loadGameData, saveGameData, clearGameData } from './storage.js';
 import { recordPlayStart, recordWin } from './stats.js';
+import { initPress, clearPress } from './press.js';
+import { findNoGuessLayout, attemptLimitFor } from './solver.js';
+import { showLoading, hideLoading, showToast, hideToast } from './notice.js';
 
 // ---------- 調整用の定数 ----------
 // 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
 const TIMER_TICK_MS = 250;          // タイマー表示の更新間隔
-const LONG_SINK_RANGE = 1;          // 長押し成立時に沈める範囲（押したマスから何マス外まで。1 = 3×3）
 const LED_MAX = 999;                // 3 桁表示の上限
 
 /** 操作モード。開放モードが既定 */
@@ -45,7 +48,7 @@ let mode = Mode.REVEAL;
 let cellEls = [];          // 添字 → セル要素
 let boardMetrics = null;   // 当たり判定用 { cellSize, frameLeft, frameTop }（fitBoard が更新）
 let timerHandle = null;
-let press = null;          // 押下中の情報（下記 startPress を参照）
+let noGuessJob = null;     // 無推測の盤面生成中なら { cancel } が入る。生成中は盤面の操作を受け付けない
 
 // ---------- 難易度 ----------
 
@@ -217,6 +220,24 @@ function fitBoard() {
   boardMetrics = fitBoardToContainer({ boardEl, boardWrapEl, mainEl, cols: game.cols });
 }
 
+/**
+ * 画面座標からセルの添字を求める。盤面の外なら -1。
+ * elementFromPoint は使わない。押下中のマスは縮小表示されるため、縁の部分で
+ * 「どのマスにも当たらない」判定になり、タップが取りこぼされてしまうから。
+ * 代わりに盤面の位置とマスの大きさから計算で求める。
+ */
+function cellIndexAtPoint(x, y) {
+  if (!boardMetrics) return -1;
+  const rect = boardEl.getBoundingClientRect();
+  const col = Math.floor((x - rect.left - boardMetrics.frameLeft) / boardMetrics.cellSize);
+  const row = Math.floor((y - rect.top - boardMetrics.frameTop) / boardMetrics.cellSize);
+  if (col < 0 || col >= game.cols || row < 0 || row >= game.rows) return -1;
+  // 盤面がスクロールで見切れている部分（ヘッダーやフッターの裏）は盤面外として扱う
+  const mainRect = mainEl.getBoundingClientRect();
+  if (y < mainRect.top || y >= mainRect.bottom) return -1;
+  return game.toIndex(col, row);
+}
+
 // ---------- ゲームの開始 ----------
 
 /**
@@ -226,6 +247,8 @@ function fitBoard() {
  */
 function newGame(key) {
   clearPress();          // 押下中の長押しタイマーも含めて確実に破棄する
+  cancelNoGuess();       // 無推測の盤面を生成中なら打ち切る
+  hideToast();           // 前のゲームの通知（生成失敗など）を持ち越さない
   difficultyKey = key;
   game = new Game(configFor(key));
   setSetting('difficulty', key);
@@ -284,7 +307,20 @@ function runAction(action) {
   persistGame();
 }
 
+/**
+ * 今のゲームの盤面設定（密度の判定用）。
+ * カスタムは設定画面で数値を変えただけで保存されるので、configFor() ではなく game の実際の値を使う
+ */
+function currentConfig() {
+  return { label: configFor(difficultyKey).label, cols: game.cols, rows: game.rows, mines: game.totalMines };
+}
+
 function doReveal(index) {
+  // 初手で無推測モードが有効なら、解ける配置を探してから開く（非同期）
+  if (game.state === GameState.READY && isNoGuessEnabled(currentConfig())) {
+    startNoGuess(index);
+    return;
+  }
   runAction(() => game.reveal(index));
 }
 
@@ -320,150 +356,71 @@ function longPressAction(index) {
   }
 }
 
-// ---------- 押下（タップ / 長押し）の処理 ----------
-//
-// 指を触れた時点では確定せず、指の下のマスをハイライトするだけ。
-// 指を動かせばハイライトが追従し、離した時点で初めて確定する。
-// 盤面の外で離した場合はキャンセル。長押しは「同じマスに触れ続けた時間」で判定する。
+// ---------- 無推測モードの盤面生成 ----------
 
 /**
- * 画面座標からセルの添字を求める。盤面の外なら -1。
- * elementFromPoint は使わない。押下中のマスは縮小表示されるため、縁の部分で
- * 「どのマスにも当たらない」判定になり、タップが取りこぼされてしまうから。
- * 代わりに盤面の位置とマスの大きさから計算で求める。
+ * 初手 index から論理だけで解ける地雷配置を探し、見つかったらそれで初手を開く。
+ * 生成中は盤面の操作を受け付けず、時間がかかるときだけローディング表示を出す。
+ * 上限まで見つからなければ通常の盤面で始め、一行の通知を出す（ダイアログは出さない）
  */
-function cellIndexAtPoint(x, y) {
-  if (!boardMetrics) return -1;
-  const rect = boardEl.getBoundingClientRect();
-  const col = Math.floor((x - rect.left - boardMetrics.frameLeft) / boardMetrics.cellSize);
-  const row = Math.floor((y - rect.top - boardMetrics.frameTop) / boardMetrics.cellSize);
-  if (col < 0 || col >= game.cols || row < 0 || row >= game.rows) return -1;
-  // 盤面がスクロールで見切れている部分（ヘッダーやフッターの裏）は盤面外として扱う
-  const mainRect = mainEl.getBoundingClientRect();
-  if (y < mainRect.top || y >= mainRect.bottom) return -1;
-  return game.toIndex(col, row);
+function startNoGuess(index) {
+  cancelNoGuess();
+  const startedGame = game;
+  const config = currentConfig();
+  const maxAttempts = attemptLimitFor(difficultyKey, config);
+
+  boardEl.classList.add('generating');
+  showLoading('盤面を生成中…');
+
+  noGuessJob = findNoGuessLayout({
+    cols: game.cols,
+    rows: game.rows,
+    firstIndex: index,
+    makeLayout: () => startedGame.createMineLayout(index),
+    maxAttempts,
+    onDone: ({ success, layout, attempts, elapsedMs }) => {
+      // 生成中に新しいゲームが始まっていれば、cancel 済みなのでここには来ないが念のため
+      if (game !== startedGame) return;
+      finishNoGuess();
+      // 開発用ログ：実測した生成時間
+      console.log(
+        `[no-guess] ${config.label} ${config.cols}×${config.rows}/${config.mines}: `
+        + `${success ? '成功' : '失敗（通常の盤面で開始）'} 試行 ${attempts}/${maxAttempts} 回, ${elapsedMs.toFixed(0)}ms`
+      );
+      if (!success) showToast('無推測の盤面を生成できませんでした');
+      runAction(() => game.reveal(index, layout));
+    },
+  });
 }
 
-/** 押下ハイライトの対象。数字マスならチョーディング対象（周囲の未開放マス）を沈める */
-function highlightTargets(index) {
-  if (index < 0) return [];
-  if (!game.revealed[index]) return [index];
-  if (game.adjacent[index] === 0) return [];
-  return game.neighbors(index).filter((n) => !game.revealed[n] && !game.flagged[n]);
+/** 生成中の表示と入力ブロックを解除する */
+function finishNoGuess() {
+  noGuessJob = null;
+  boardEl.classList.remove('generating');
+  hideLoading();
 }
 
-function setHighlight(indices) {
-  for (const i of press.highlighted) cellEls[i].classList.remove('pressed');
-  for (const i of indices) cellEls[i].classList.add('pressed');
-  press.highlighted = indices;
-}
-
-/**
- * 長押し成立の合図。押したマスを中心に、周囲 LONG_SINK_RANGE マスまでの範囲を一斉に沈めて戻す。
- * 指で隠れる中心のマスだけでは気付きにくいため、周囲まで広げている
- */
-function sinkAround(index) {
-  const { col, row } = game.toCoord(index);
-  for (let dr = -LONG_SINK_RANGE; dr <= LONG_SINK_RANGE; dr++) {
-    for (let dc = -LONG_SINK_RANGE; dc <= LONG_SINK_RANGE; dc++) {
-      const c = col + dc;
-      const r = row + dr;
-      if (c < 0 || c >= game.cols || r < 0 || r >= game.rows) continue;
-      sinkCell(cellEls[game.toIndex(c, r)]);
-    }
-  }
-}
-
-function stopLongPressTimer() {
-  if (press && press.timer !== null) {
-    clearTimeout(press.timer);
-    press.timer = null;
-  }
-}
-
-/** 現在のマスに対する長押しタイマーを（再）開始する。開放済みのマスでは開始しない */
-function restartLongPressTimer() {
-  stopLongPressTimer();
-  const index = press.index;
-  if (index < 0 || game.revealed[index]) return;
-  const current = press;
-  current.timer = setTimeout(() => {
-    if (press !== current) return;
-    current.timer = null;
-    current.longFired = true;
-    setHighlight([]);
-    longPressAction(index);
-    sinkAround(index);
-    if (!game.isOver) setFace('normal');
-  }, getLongPressMs());
-}
-
-/** 指の下のマスが変わったときの処理。ハイライトを移し、長押しの計時をやり直す */
-function movePressTo(index) {
-  if (index === press.index) return;
-  press.index = index;
-  setHighlight(highlightTargets(index));
-  restartLongPressTimer();
-}
-
-function clearPress() {
-  if (!press) return;
-  stopLongPressTimer();
-  setHighlight([]);
-  press = null;
-  if (game && !game.isOver) setFace('normal');
-}
-
-function onPointerDown(event) {
-  // 押下中に別の指が触れても無視する（親指で長押し中に他の指がかすっても取り消さない）
-  if (press && event.pointerId !== press.pointerId) return;
-  // 同じポインタの前回の押下が残っていれば（ウィンドウ外で離した等）先に片付ける
-  clearPress();
-
-  if (game.isOver) return;
-  if (isSettingsOpen()) return;   // 設定画面がせり上がっている最中に、まだ隠れていない盤面を押されても無視する
-  if (event.pointerType === 'mouse' && event.button !== 0) return;
-  const index = cellIndexAtPoint(event.clientX, event.clientY);
-  if (index < 0) return;
-
-  press = {
-    pointerId: event.pointerId,
-    index: -1,           // movePressTo で設定する
-    highlighted: [],
-    timer: null,
-    longFired: false,
-  };
-  movePressTo(index);
-  setFace('pressed');
-}
-
-function onPointerMove(event) {
-  if (!press || event.pointerId !== press.pointerId) return;
-  if (press.longFired) return;   // 長押し確定後は指を動かしても何もしない
-  movePressTo(cellIndexAtPoint(event.clientX, event.clientY));
-}
-
-function onPointerUp(event) {
-  if (!press || event.pointerId !== press.pointerId) return;
-  const { longFired } = press;
-  const index = cellIndexAtPoint(event.clientX, event.clientY);
-  clearPress();
-  if (longFired) return;        // 長押し済みならタップとして扱わない
-  if (index < 0) return;        // 盤面の外で離した → キャンセル
-  tapAction(index);
-}
-
-function onPointerCancel(event) {
-  if (!press || event.pointerId !== press.pointerId) return;
-  clearPress();
+/** 生成中なら打ち切る（新しいゲームを始めるとき） */
+function cancelNoGuess() {
+  if (!noGuessJob) return;
+  noGuessJob.cancel();
+  finishNoGuess();
 }
 
 // ---------- イベント登録 ----------
 
-boardEl.addEventListener('pointerdown', onPointerDown);
-window.addEventListener('pointermove', onPointerMove, { passive: true });
-window.addEventListener('pointerup', onPointerUp);
-window.addEventListener('pointercancel', onPointerCancel);
+initPress({
+  boardEl,
+  getGame: () => game,
+  getCell: (i) => cellEls[i],
+  cellIndexAtPoint,
+  // 終了後・設定画面がせり上がっている最中・無推測の盤面生成中は押下を受け付けない
+  isBlocked: () => game.isOver || isSettingsOpen() || noGuessJob !== null,
+  getLongPressMs,
+  setFace,
+  onTap: tapAction,
+  onLongPress: longPressAction,
+});
 
 // アプリが裏に回ったら：押下を破棄し（復帰後に長押しタイマーが遅れて発火して勝手に旗が立つのを防ぐ）、
 // タイマーを止め、その時点の状態を保存する（iOS は背面のアプリを予告なく終了させるため）。

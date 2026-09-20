@@ -248,6 +248,24 @@
   font-size: 12px;
 }
 
+/* 高密度のときだけ出る注意書きとトグル（settings.js が hidden を切り替える） */
+.custom-high-density {
+  margin: 0 0 12px;
+  padding: 8px 10px 4px;
+  border: 2px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+}
+
+.custom-high-density[hidden] {
+  display: none;
+}
+
+.custom-high-density-note {
+  margin: 0;
+  color: var(--color-ui-fg);
+  font-weight: 700;
+}
+
 /* ---------- 汎用ボタン ---------- */
 
 .btn {
