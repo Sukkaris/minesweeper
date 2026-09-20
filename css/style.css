@@ -84,6 +84,21 @@
   --color-banner-accent: #ffe066;
 
   --color-overlay: rgba(0, 0, 0, 0.45);
+
+  /* --- 設定画面・統計画面（settings.css が参照） --- */
+  --sheet-duration: 260ms;             /* シートがせり上がる時間 */
+  --sheet-header-height: 50px;
+  --color-sheet-bg: #c0c0c0;
+  --color-sheet-header-bg: #c0c0c0;
+  --color-muted: #505050;              /* 補足文などの控えめな文字色 */
+  --color-input-bg: #ffffff;           /* 数値入力欄の背景 */
+  --color-choice-selected-bg: #a0a0a0; /* 選択中の選択肢ボタン */
+  --color-toggle-off: #808080;
+  --color-toggle-on: #2e8b2e;
+  --color-toggle-knob: #e0e0e0;
+  --color-danger-bg: #a04040;          /* リセットボタン */
+  --color-danger-fg: #ffffff;
+  --color-table-line: #808080;
 }
 
 /* ---------- ベース ---------- */
@@ -481,83 +496,3 @@ button {
   opacity: 0.85;
 }
 
-/* ---------- 簡易設定（暫定） ---------- */
-
-.settings {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: var(--color-overlay);
-  touch-action: none;
-}
-
-.settings[hidden] {
-  display: none;
-}
-
-.settings-panel {
-  width: 100%;
-  max-width: 340px;
-  padding: 16px;
-  background: var(--color-panel);
-  color: var(--color-ui-fg);
-  border: 3px solid;
-  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
-}
-
-.settings-title {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 8px 0;
-  font-size: 14px;
-}
-
-.settings-value {
-  font-variant-numeric: tabular-nums;
-  min-width: 5ch;
-  text-align: right;
-}
-
-.settings-range {
-  width: 100%;
-  margin: 4px 0 16px;
-}
-
-.settings-try {
-  margin-top: 12px;
-}
-
-/* 試し押し用のダミー盤面（3×3、中央だけ押せる）。盤面と同じ見た目にするため .board / .cell をそのまま使う */
-.dummy-board {
-  --cols: 3;
-  --rows: 3;
-  --cell-size: 30px;
-  flex: 0 0 auto;
-}
-
-.settings-close {
-  display: block;
-  width: 100%;
-  height: 40px;
-  margin-top: 16px;
-  font-size: 15px;
-  background: var(--color-button-bg);
-  color: var(--color-button-fg);
-  border: 2px solid;
-  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
-}
-
-.settings-close:active {
-  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
-}

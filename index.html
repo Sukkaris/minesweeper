@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/settings.css">
   <link rel="stylesheet" href="./css/themes.css">
 </head>
 <body>
@@ -115,30 +116,132 @@
 
   </div>
 
-  <!-- 簡易設定（第3段階で正式な設定画面に移す）：長押し時間の調整と試し押し -->
-  <div class="settings" id="settings" hidden>
-    <div class="settings-panel" role="dialog" aria-label="設定">
-      <h2 class="settings-title">設定（暫定）</h2>
+  <!--
+    設定画面：下からせり上がるフルスクリーンのシート（settings.js が制御）。
+    項目の順序は仕様どおり：難易度 → テーマ → 無推測 → 長押し → 視覚演出 → サウンド → 統計 → SW 版
+  -->
+  <section class="sheet" id="settings" role="dialog" aria-label="設定" aria-hidden="true">
+    <header class="sheet-header">
+      <h2 class="sheet-title">設定</h2>
+      <button class="sheet-close" id="settings-close" type="button" aria-label="閉じる">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M5 5l14 14M19 5 5 19" style="fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round"/>
+        </svg>
+      </button>
+    </header>
 
-      <div class="settings-row">
-        <label class="settings-label" for="long-press-range">長押しの長さ</label>
-        <div class="settings-value" id="long-press-value">300 ms</div>
-      </div>
-      <input class="settings-range" id="long-press-range" type="range" min="200" max="600" step="50" value="300">
+    <div class="sheet-body">
 
-      <div class="settings-row settings-try">
-        <div class="settings-label">試し押し（長押しで旗が立つ／外れる）</div>
-        <!-- 3×3 の中央だけが押せる。周囲は長押し成立時に光る範囲を見せるための飾り -->
-        <div class="board dummy-board" id="dummy-board" aria-hidden="true">
-          <div class="cell hidden"></div><div class="cell hidden"></div><div class="cell hidden"></div>
-          <div class="cell hidden"></div><div class="cell hidden" id="dummy-cell"></div><div class="cell hidden"></div>
-          <div class="cell hidden"></div><div class="cell hidden"></div><div class="cell hidden"></div>
+      <!-- 1. 難易度：選ぶと即座に新しい盤面になり、設定画面は閉じる（確認なし） -->
+      <section class="settings-section">
+        <h3 class="settings-heading">難易度</h3>
+        <div class="choice-group" id="difficulty-group"></div>
+
+        <!-- カスタムを選んだときだけ展開する入力欄 -->
+        <div class="custom-panel" id="custom-panel" hidden>
+          <div class="custom-fields">
+            <label class="custom-field">
+              <span class="custom-field-label">列数</span>
+              <input class="number-input" id="custom-cols" type="number" inputmode="numeric" pattern="[0-9]*">
+            </label>
+            <label class="custom-field">
+              <span class="custom-field-label">行数</span>
+              <input class="number-input" id="custom-rows" type="number" inputmode="numeric" pattern="[0-9]*">
+            </label>
+            <label class="custom-field">
+              <span class="custom-field-label">地雷数</span>
+              <input class="number-input" id="custom-mines" type="number" inputmode="numeric" pattern="[0-9]*">
+            </label>
+          </div>
+          <p class="custom-density">
+            地雷密度 <strong id="custom-density">12.3%</strong>
+            <span class="custom-density-hint">（20% 前後が快適です）</span>
+          </p>
+          <button class="btn btn-primary" id="custom-start" type="button">この設定で始める</button>
         </div>
-      </div>
+      </section>
 
-      <button class="settings-close" id="settings-close" type="button">閉じる</button>
+      <!-- 2. テーマ（選択肢は settings.js の配列から生成） -->
+      <section class="settings-section">
+        <h3 class="settings-heading">テーマ</h3>
+        <div class="choice-group" id="theme-group"></div>
+      </section>
+
+      <!-- 3. 無推測モード（第4段階で機能を実装。ここでは保存のみ） -->
+      <section class="settings-section">
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <span class="toggle-label">無推測モード</span>
+            <span class="toggle-note">運に頼らず解ける盤面だけを出します（準備中）</span>
+          </span>
+          <input class="toggle" id="toggle-no-guess" type="checkbox">
+        </label>
+      </section>
+
+      <!-- 4. 長押しの長さ＋試し押し -->
+      <section class="settings-section">
+        <div class="settings-row">
+          <label class="settings-heading" for="long-press-range">長押しの長さ</label>
+          <div class="settings-value" id="long-press-value">300 ms</div>
+        </div>
+        <input class="settings-range" id="long-press-range" type="range" min="200" max="600" step="50" value="300">
+        <div class="settings-try">
+          <div class="settings-note">試し押し（長押しで旗が立つ／外れる）</div>
+          <!-- 3×3 の中央だけが押せる。周囲は長押し成立時に沈む範囲を見せるための飾り -->
+          <div class="board dummy-board" id="dummy-board" aria-hidden="true">
+            <div class="cell hidden"></div><div class="cell hidden"></div><div class="cell hidden"></div>
+            <div class="cell hidden"></div><div class="cell hidden" id="dummy-cell"></div><div class="cell hidden"></div>
+            <div class="cell hidden"></div><div class="cell hidden"></div><div class="cell hidden"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. 視覚演出 / 6. サウンド（第5段階で機能を実装。ここでは保存のみ） -->
+      <section class="settings-section">
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <span class="toggle-label">視覚演出</span>
+            <span class="toggle-note">クリア時などの演出（準備中）</span>
+          </span>
+          <input class="toggle" id="toggle-effects" type="checkbox">
+        </label>
+        <label class="toggle-row">
+          <span class="toggle-text">
+            <span class="toggle-label">サウンド</span>
+            <span class="toggle-note">効果音（準備中）</span>
+          </span>
+          <input class="toggle" id="toggle-sound" type="checkbox">
+        </label>
+      </section>
+
+      <!-- 7. 統計へのリンク -->
+      <section class="settings-section">
+        <button class="link-row" id="stats-open" type="button">
+          <span>統計</span>
+          <span class="link-row-chevron" aria-hidden="true">›</span>
+        </button>
+      </section>
+
+      <!-- 8. 今動いている Service Worker のバージョン（pwa.js が問い合わせて書き込む） -->
+      <p class="sheet-footnote">Service Worker: <span id="sw-version">—</span></p>
     </div>
-  </div>
+  </section>
+
+  <!-- 統計画面：設定画面の上に重ねて開く（stats-screen.js が制御） -->
+  <section class="sheet sheet-upper" id="stats" role="dialog" aria-label="統計" aria-hidden="true">
+    <header class="sheet-header">
+      <button class="sheet-back" id="stats-back" type="button">
+        <span class="sheet-back-chevron" aria-hidden="true">‹</span>設定
+      </button>
+      <h2 class="sheet-title">統計</h2>
+    </header>
+
+    <div class="sheet-body">
+      <table class="stats-table" id="stats-table"></table>
+      <p class="settings-note">中断したゲームは敗北として数えます。カスタム難易度は記録しません。</p>
+      <button class="btn btn-danger" id="stats-reset" type="button">統計をリセット</button>
+    </div>
+  </section>
 
   <script type="module" src="./js/ui.js"></script>
   <script type="module" src="./js/pwa.js"></script>

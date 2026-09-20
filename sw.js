@@ -4,7 +4,7 @@
 // ★ コードを変更したら、必ず下の CACHE_VERSION の数字を 1 つ増やすこと ★
 // これを忘れると、ホーム画面のアプリは古いキャッシュで起動し続け、変更が反映されない。
 
-const CACHE_VERSION = 5;
+const CACHE_VERSION = 6;
 const CACHE_NAME = 'ms-cache-v' + CACHE_VERSION;
 
 // キャッシュ対象。tools/ 配下は開発用なので含めない。
@@ -14,8 +14,13 @@ const ASSETS = [
   './index.html',
   './manifest.json',
   './css/style.css',
+  './css/settings.css',
   './css/themes.css',
   './js/game.js',
+  './js/storage.js',
+  './js/stats.js',
+  './js/stats-screen.js',
+  './js/board-layout.js',
   './js/dom-utils.js',
   './js/settings.js',
   './js/ui.js',
@@ -68,9 +73,14 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// 更新バナーからの合図で、待機中の自分自身を即座に有効化する
+// ページからの合図
+//   SKIP_WAITING: 更新バナーが押された。待機中の自分自身を即座に有効化する
+//   GET_VERSION : 設定画面の版番号表示用。今動いている自分の CACHE_VERSION を返す
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (!event.data) return;
+  if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  } else if (event.data.type === 'GET_VERSION' && event.source) {
+    event.source.postMessage({ type: 'VERSION', version: CACHE_VERSION });
   }
 });

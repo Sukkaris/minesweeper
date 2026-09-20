@@ -1,16 +1,19 @@
 // UI 層。DOM 操作・イベント処理・描画を担当する。ゲームのルールは game.js に任せる。
 
-import { Game, GameState, DIFFICULTIES, DEFAULT_DIFFICULTY } from './game.js';
-import { createIcon, sinkCell } from './dom-utils.js';
-import { initSettings, getLongPressMs } from './settings.js';
+import { Game, GameState, DIFFICULTIES, CUSTOM_KEY } from './game.js';
+import { createIcon, sinkCell, installZoomGuards } from './dom-utils.js';
+import { fitBoardToContainer } from './board-layout.js';
+import {
+  initSettings, getLongPressMs, getSetting, setSetting, getCustomConfig, isSettingsOpen,
+} from './settings.js';
+import { loadGameData, saveGameData, clearGameData } from './storage.js';
+import { recordPlayStart, recordWin } from './stats.js';
 
 // ---------- 調整用の定数 ----------
 // 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
 const TIMER_TICK_MS = 250;          // タイマー表示の更新間隔
-const DOUBLE_TAP_MS = 350;          // この間隔以内の 2 回目のタップをダブルタップとみなし、拡大を抑止する
 const LONG_SINK_RANGE = 1;          // 長押し成立時に沈める範囲（押したマスから何マス外まで。1 = 3×3）
 const LED_MAX = 999;                // 3 桁表示の上限
-const STORAGE_KEY_DIFFICULTY = 'ms-difficulty';
 
 /** 操作モード。開放モードが既定 */
 const Mode = Object.freeze({ REVEAL: 'reveal', FLAG: 'flag' });
@@ -37,42 +40,76 @@ const modeHintEl = document.getElementById('mode-hint');
 
 // ---------- 状態 ----------
 let game = null;
-let difficultyKey = DEFAULT_DIFFICULTY;
+let difficultyKey = null;  // 現在のゲームの難易度キー（'beginner' 等、または CUSTOM_KEY）
 let mode = Mode.REVEAL;
 let cellEls = [];          // 添字 → セル要素
 let boardMetrics = null;   // 当たり判定用 { cellSize, frameLeft, frameTop }（fitBoard が更新）
 let timerHandle = null;
 let press = null;          // 押下中の情報（下記 startPress を参照）
 
-// ---------- 永続化 ----------
+// ---------- 難易度 ----------
 
-function loadDifficulty() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY_DIFFICULTY);
-    if (saved && DIFFICULTIES[saved]) return saved;
-  } catch (_) { /* localStorage が使えない環境では無視 */ }
-  return DEFAULT_DIFFICULTY;
-}
-
-function saveDifficulty(key) {
-  try {
-    localStorage.setItem(STORAGE_KEY_DIFFICULTY, key);
-  } catch (_) { /* 無視 */ }
+/** キーから盤面設定を引く。カスタムは設定画面の入力内容を使う */
+function configFor(key) {
+  return key === CUSTOM_KEY ? getCustomConfig() : DIFFICULTIES[key];
 }
 
 /**
- * 起動時の難易度を決める。
- * URL の ?level= があればそれを採用して保存する（ホーム画面起動でも次回から効くようにするため）。
- * なければ保存済みの値、それもなければ初級。
+ * URL の ?level= を読む。あれば「明示的に新しいゲームを頼まれた」とみなし、
+ * 保存済みの途中ゲームがあっても新規に始める。無ければ null
  */
-function resolveStartupDifficulty() {
+function difficultyFromUrl() {
   const param = new URLSearchParams(location.search).get('level');
-  const key = param ? LEVEL_PARAM_ALIASES[param.toLowerCase()] : null;
-  if (key) {
-    saveDifficulty(key);
-    return key;
+  if (!param) return null;
+  const alias = param.toLowerCase();
+  return Object.prototype.hasOwnProperty.call(LEVEL_PARAM_ALIASES, alias) ? LEVEL_PARAM_ALIASES[alias] : null;
+}
+
+// ---------- ゲーム状態の保存 / 復元 ----------
+
+/** プレイ中なら保存、そうでなければ（未開始・終了）保存データを消す */
+function persistGame() {
+  if (game.state === GameState.PLAYING) {
+    saveGameData({ difficulty: difficultyKey, ...game.serialize() });
+  } else {
+    clearGameData();
   }
-  return loadDifficulty();
+}
+
+/** 保存されていた途中のゲームを無言で復元する。無ければ false */
+function restoreGame() {
+  const data = loadGameData();
+  if (!data) return false;
+  const restored = Game.deserialize(data);
+  if (!restored || restored.state !== GameState.PLAYING) {
+    clearGameData();
+    return false;
+  }
+  game = restored;
+  // 難易度キーが今のコードに無いものなら、統計に影響しないようカスタム扱いにする
+  const known = Object.prototype.hasOwnProperty.call(DIFFICULTIES, data.difficulty);
+  difficultyKey = known ? data.difficulty : CUSTOM_KEY;
+  setSetting('difficulty', difficultyKey);   // 設定画面の表示と食い違わないよう揃えておく
+  setupBoard();
+  return true;
+}
+
+// ---------- タイマーの進行制御 ----------
+
+/**
+ * 「プレイ中」かつ「前面にある」かつ「設定画面が閉じている」ときだけタイマーを進める。
+ * 背面にいた時間や設定画面を開いていた時間はベストタイムに含めない
+ */
+function updateRunning() {
+  const shouldRun = game.state === GameState.PLAYING && !document.hidden && !isSettingsOpen();
+  if (shouldRun) {
+    game.resume();
+    startTimerTick();
+  } else {
+    game.pause();
+    stopTimerTick();
+  }
+  updateTimer();
 }
 
 // ---------- 3 桁表示 ----------
@@ -95,7 +132,7 @@ function updateTimer() {
 }
 
 function startTimerTick() {
-  stopTimerTick();
+  if (timerHandle !== null) return;
   timerHandle = setInterval(() => {
     updateTimer();
     if (game.isOver) stopTimerTick();
@@ -174,58 +211,37 @@ function renderCells(indices) {
   for (const i of indices) renderCell(i);
 }
 
-/**
- * 盤面のサイズ計算。
- * 1 マスの辺 = (利用可能な横幅 − 余白) ÷ 列数。正方形を保ち、横スクロールは発生させない。
- * 固定値は使わず、実際のコンテナ幅から算出する。
- */
+/** 盤面のサイズをコンテナ幅に合わせ、当たり判定用の寸法を覚えておく（計算は board-layout.js） */
 function fitBoard() {
   if (!game) return;
-  const wrapStyle = getComputedStyle(boardWrapEl);
-  const boardStyle = getComputedStyle(boardEl);
-  const padding = parseFloat(wrapStyle.paddingLeft) + parseFloat(wrapStyle.paddingRight);
-  const frame = parseFloat(boardStyle.borderLeftWidth) + parseFloat(boardStyle.borderRightWidth)
-              + parseFloat(boardStyle.paddingLeft) + parseFloat(boardStyle.paddingRight);
-  const available = mainEl.clientWidth - padding - frame;
-  // 端末の物理ピクセル単位に切り捨て、マス間に隙間や太さムラが出ないようにする
-  const dpr = window.devicePixelRatio || 1;
-  const cellSize = Math.max(1, Math.floor((available / game.cols) * dpr) / dpr);
-  const value = cellSize + 'px';
-  if (boardEl.style.getPropertyValue('--cell-size') !== value) {
-    boardEl.style.setProperty('--cell-size', value);
-  }
-  // 当たり判定用に、マスの大きさと外枠の太さを覚えておく
-  boardMetrics = {
-    cellSize,
-    frameLeft: parseFloat(boardStyle.borderLeftWidth) + parseFloat(boardStyle.paddingLeft),
-    frameTop: parseFloat(boardStyle.borderTopWidth) + parseFloat(boardStyle.paddingTop),
-  };
-  updateTouchAction();
-}
-
-/**
- * 盤面が縦にはみ出さないときはブラウザにスクロールを一切渡さない（touch-action: none）。
- * こうしないと、指を上下に動かして狙いを修正しただけで押下がキャンセルされてしまう。
- * はみ出すとき（上級）だけ縦スクロールを許可する。
- */
-function updateTouchAction() {
-  const overflows = boardWrapEl.offsetHeight > mainEl.clientHeight;
-  boardEl.style.touchAction = overflows ? 'pan-y' : 'none';
+  boardMetrics = fitBoardToContainer({ boardEl, boardWrapEl, mainEl, cols: game.cols });
 }
 
 // ---------- ゲームの開始 ----------
 
+/**
+ * 新しいゲームを始める（スマイリー・難易度変更・起動時）。
+ * 進行中のゲームは確認なしに破棄する。中断は「敗北」扱いだが、
+ * プレイ回数は開始時に加算済みなので、ここでは保存データを消すだけで統計には触れない
+ */
 function newGame(key) {
-  stopTimerTick();
   clearPress();          // 押下中の長押しタイマーも含めて確実に破棄する
   difficultyKey = key;
-  game = new Game(DIFFICULTIES[key]);
+  game = new Game(configFor(key));
+  setSetting('difficulty', key);
+  clearGameData();
+  setupBoard();
+}
 
+/** 盤面と表示を現在の game に合わせて作り直す（新規・復元の両方で使う） */
+function setupBoard() {
+  stopTimerTick();
   buildBoard();
+  renderCells(game.allIndices());
   updateMineCounter();
-  updateTimer();
-  setFace('normal');
+  updateFaceFromState();
   mainEl.scrollTop = 0;
+  updateRunning();
 }
 
 // ---------- モード切替 ----------
@@ -248,29 +264,39 @@ function toggleMode() {
 
 // ---------- 操作の適用 ----------
 
-function applyResult(changed) {
+/**
+ * 盤面を変える操作を 1 つ実行し、描画・統計・保存をまとめて行う。
+ * @param {() => {changed:number[]}} action
+ */
+function runAction(action) {
+  const before = game.state;
+  const { changed } = action();
   if (changed.length === 0) return;
-  if (game.startTime !== null && timerHandle === null && !game.isOver) startTimerTick();
+
+  // 最初のタップで地雷が置かれた時点をプレイ回数に数える（カスタムは stats 側で無視される）
+  if (before === GameState.READY && game.state !== GameState.READY) recordPlayStart(difficultyKey);
+  if (game.state === GameState.WON) recordWin(difficultyKey, game.elapsedMs);
 
   renderCells(changed);
   updateMineCounter();
-  updateTimer();
   updateFaceFromState();
-  if (game.isOver) stopTimerTick();
+  updateRunning();
+  persistGame();
 }
 
 function doReveal(index) {
-  applyResult(game.reveal(index).changed);
+  runAction(() => game.reveal(index));
 }
 
 function doChord(index) {
-  applyResult(game.chord(index).changed);
+  runAction(() => game.chord(index));
 }
 
 function doToggleFlag(index) {
   if (!game.toggleFlag(index)) return;
   renderCell(index);
   updateMineCounter();
+  persistGame();
 }
 
 /** タップ（指を離したとき）の動作。開放済みの数字マスはモードに関係なくチョーディング */
@@ -395,6 +421,7 @@ function onPointerDown(event) {
   clearPress();
 
   if (game.isOver) return;
+  if (isSettingsOpen()) return;   // 設定画面がせり上がっている最中に、まだ隠れていない盤面を押されても無視する
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   const index = cellIndexAtPoint(event.clientX, event.clientY);
   if (index < 0) return;
@@ -438,30 +465,20 @@ window.addEventListener('pointermove', onPointerMove, { passive: true });
 window.addEventListener('pointerup', onPointerUp);
 window.addEventListener('pointercancel', onPointerCancel);
 
-// アプリが裏に回ったら押下を破棄する（復帰後に長押しタイマーが遅れて発火し、勝手に旗が立つのを防ぐ）
+// アプリが裏に回ったら：押下を破棄し（復帰後に長押しタイマーが遅れて発火して勝手に旗が立つのを防ぐ）、
+// タイマーを止め、その時点の状態を保存する（iOS は背面のアプリを予告なく終了させるため）。
+// 前面に戻ったらタイマーを再開する
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) clearPress();
+  updateRunning();
+  if (document.hidden) persistGame();
+});
+window.addEventListener('pagehide', () => {
+  updateRunning();
+  persistGame();
 });
 
-// 長押し時の iOS のコールアウトメニューやデスクトップの右クリックメニューを抑止
-document.addEventListener('contextmenu', (event) => event.preventDefault());
-
-// ダブルタップ拡大の抑止（iOS は viewport の user-scalable=no を無視することがある）。
-// 短い間隔で 2 回目のタップが終わった瞬間に標準動作を止めれば、拡大は起きない。
-// ただしボタン・スライダー・設定パネルは click イベントで動くので、そこでは止めない
-// （止めると click が発火しなくなる）。これらは CSS の touch-action: manipulation で抑止済み。
-let lastTouchEndTime = 0;
-document.addEventListener('touchend', (event) => {
-  const now = Date.now();
-  const isDoubleTap = now - lastTouchEndTime < DOUBLE_TAP_MS;
-  lastTouchEndTime = now;
-  if (!isDoubleTap || !event.cancelable) return;
-  if (event.target.closest('button, input, .settings')) return;
-  event.preventDefault();
-}, { passive: false });
-
-// ピンチ拡大の開始も止める（iOS Safari 独自のイベント）
-document.addEventListener('gesturestart', (event) => event.preventDefault());
+installZoomGuards();
 
 smileyEl.addEventListener('click', () => newGame(difficultyKey));
 modeToggleEl.addEventListener('click', toggleMode);
@@ -470,6 +487,17 @@ modeToggleEl.addEventListener('click', toggleMode);
 new ResizeObserver(() => fitBoard()).observe(mainEl);
 
 // ---------- 起動 ----------
-initSettings({ onOpen: clearPress });   // 設定を開くときは盤面の押下状態を片付ける
+initSettings({
+  onOpen: () => { clearPress(); updateRunning(); },   // 開いている間はタイマーを止める
+  onClose: updateRunning,
+  onDifficultyChange: newGame,
+});
 setMode(Mode.REVEAL);
-newGame(resolveStartupDifficulty());
+
+// 起動時の盤面：?level= の明示指定 → 保存済みの途中ゲームを無言で復元 → 保存済みの難易度で新規
+const urlDifficulty = difficultyFromUrl();
+if (urlDifficulty) {
+  newGame(urlDifficulty);
+} else if (!restoreGame()) {
+  newGame(getSetting('difficulty'));
+}

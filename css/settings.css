@@ -1,0 +1,421 @@
+/* ============================================================
+   設定画面・統計画面（下からせり上がるフルスクリーンのシート）
+   色・寸法の値は style.css の :root で定義した変数を使う。
+   ============================================================ */
+
+/* ---------- シート本体 ---------- */
+
+/* 閉じているときは画面の下に隠しておき、.open で上がってくる。
+   閉じるときは移動が終わってから visibility を切る（transition の遅延で実現） */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-sheet-bg);
+  color: var(--color-ui-fg);
+  transform: translateY(100%);
+  visibility: hidden;
+  transition: transform var(--sheet-duration) ease-out,
+              visibility 0s linear var(--sheet-duration);
+  touch-action: manipulation;
+}
+
+.sheet.open {
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform var(--sheet-duration) ease-out,
+              visibility 0s;
+}
+
+/* 統計画面は設定画面の上に重ねる */
+.sheet-upper {
+  z-index: 21;
+}
+
+/* 見出し帯：ステータスバーの裏は黒く塗り、その下にタイトルと閉じるボタン */
+.sheet-header {
+  flex: 0 0 auto;
+  position: relative;
+  height: calc(var(--sheet-header-height) + var(--safe-top));
+  padding-top: var(--safe-top);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    var(--color-status-bar-bg) var(--safe-top),
+    var(--color-sheet-header-bg) var(--safe-top)
+  );
+  box-shadow: inset 0 -2px 0 var(--color-bevel-dark);
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.sheet-close,
+.sheet-back {
+  position: absolute;
+  top: var(--safe-top);
+  height: var(--sheet-header-height);
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.sheet-close {
+  right: var(--header-edge-gap);
+  width: var(--gear-size);
+  justify-content: center;
+  padding: 8px;
+}
+
+.sheet-close svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sheet-back {
+  left: var(--header-edge-gap);
+  padding: 0 4px;
+  gap: 2px;
+}
+
+.sheet-back-chevron {
+  font-size: 26px;
+  line-height: 1;
+  position: relative;
+  top: -2px;
+}
+
+.sheet-close:active,
+.sheet-back:active {
+  opacity: 0.5;
+}
+
+/* 内容：縦スクロール可能。下端はホームバーの分だけ余白を取る */
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 16px calc(24px + var(--safe-bottom));
+  touch-action: pan-y;
+}
+
+.sheet-footnote {
+  margin: 28px 0 0;
+  font-size: 11px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+/* ---------- 設定の各区画 ---------- */
+
+.settings-section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-bevel-dark);
+  box-shadow: 0 1px 0 var(--color-bevel-light);
+}
+
+.settings-heading {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-row .settings-heading {
+  margin: 0;
+}
+
+.settings-value {
+  font-variant-numeric: tabular-nums;
+  min-width: 5ch;
+  text-align: right;
+  font-size: 14px;
+}
+
+.settings-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* ---------- 選択肢ボタン群（難易度・テーマ） ---------- */
+
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 立体ベベルのボタン。選択中は沈んだ見た目にする */
+.choice {
+  flex: 1 1 calc(25% - 8px);
+  min-width: 72px;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+  background: var(--color-button-bg);
+  color: var(--color-button-fg);
+  border: 2px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+  white-space: nowrap;
+}
+
+.choice:active {
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+}
+
+.choice.selected {
+  background: var(--color-choice-selected-bg);
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  font-weight: 700;
+}
+
+/* ---------- カスタム難易度の入力欄 ---------- */
+
+.custom-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 2px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+}
+
+.custom-panel[hidden] {
+  display: none;
+}
+
+.custom-fields {
+  display: flex;
+  gap: 10px;
+}
+
+.custom-field {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+/* 数値入力欄：沈んだ白い枠。iOS の標準見た目を消す */
+.number-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 16px;                  /* 16px 未満だと iOS がフォーカス時に拡大するため */
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--color-ui-fg);
+  background: var(--color-input-bg);
+  border: 2px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.number-input::-webkit-inner-spin-button,
+.number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.custom-density {
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.custom-density-hint {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+/* ---------- 汎用ボタン ---------- */
+
+.btn {
+  display: block;
+  width: 100%;
+  height: 44px;
+  font-size: 15px;
+  background: var(--color-button-bg);
+  color: var(--color-button-fg);
+  border: 2px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+}
+
+.btn:active {
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  filter: brightness(0.92);
+}
+
+.btn-primary {
+  font-weight: 700;
+}
+
+.btn-danger {
+  margin-top: 20px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-fg);
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+}
+
+/* ---------- トグル（スイッチ） ---------- */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 0;
+}
+
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.toggle-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.toggle-note {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+/* 標準のチェックボックスを消し、ベベル付きのスイッチを描く */
+.toggle {
+  flex: 0 0 auto;
+  position: relative;
+  width: 50px;
+  height: 28px;
+  margin: 0;
+  background: var(--color-toggle-off);
+  border: 2px solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 120ms ease-out;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-toggle-knob);
+  border: 2px solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+  transition: transform 120ms ease-out;
+}
+
+.toggle:checked {
+  background: var(--color-toggle-on);
+}
+
+.toggle:checked::after {
+  transform: translateX(22px);
+}
+
+/* ---------- 長押しの長さ ---------- */
+
+.settings-range {
+  width: 100%;
+  margin: 8px 0 12px;
+}
+
+.settings-try {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 試し押し用のダミー盤面（3×3、中央だけ押せる）。盤面と同じ見た目にするため .board / .cell をそのまま使う */
+.dummy-board {
+  --cols: 3;
+  --rows: 3;
+  --cell-size: 30px;
+  flex: 0 0 auto;
+  touch-action: none;
+}
+
+/* ---------- 統計へのリンク行 ---------- */
+
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.link-row:active {
+  opacity: 0.5;
+}
+
+.link-row-chevron {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--color-muted);
+}
+
+/* ---------- 統計の表 ---------- */
+
+.stats-table {
+  width: 100%;
+  margin: 8px 0 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--color-table-line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats-table thead th {
+  font-weight: 700;
+  border-bottom-width: 2px;
+}
+
+.stats-table .stats-corner {
+  border-bottom-color: transparent;
+}
+
+/* 行見出しは左寄せ。数値列を圧迫しないよう幅を抑える */
+.stats-table .stats-label {
+  width: 30%;
+  font-weight: 400;
+  text-align: left;
+  color: var(--color-muted);
+}
