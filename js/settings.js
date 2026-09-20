@@ -16,6 +16,7 @@ const settingsEl = document.getElementById('settings');
 const settingsCloseEl = document.getElementById('settings-close');
 const longPressRangeEl = document.getElementById('long-press-range');
 const longPressValueEl = document.getElementById('long-press-value');
+const dummyBoardEl = document.getElementById('dummy-board');
 const dummyCellEl = document.getElementById('dummy-cell');
 
 // ---------- 状態 ----------
@@ -90,7 +91,8 @@ function onDummyPointerDown(event) {
     dummyFlagged = !dummyFlagged;
     renderDummyCell();
     dummyCellEl.classList.add('pressed');   // 指を離すまでは沈めたままにする（盤面と同じ挙動）
-    flashCell(dummyCellEl);
+    // 盤面と同じく、周囲のマスまで（3×3 全体を）光らせる
+    for (const cell of dummyBoardEl.querySelectorAll('.cell')) flashCell(cell);
   }, longPressMs);
   dummyPress = current;
   dummyCellEl.classList.add('pressed');

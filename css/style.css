@@ -538,11 +538,11 @@ button {
   margin-top: 12px;
 }
 
-/* 試し押し用のダミーマス。盤面と同じ見た目にするため .board / .cell をそのまま使う */
+/* 試し押し用のダミー盤面（3×3、中央だけ押せる）。盤面と同じ見た目にするため .board / .cell をそのまま使う */
 .dummy-board {
-  --cols: 1;
-  --rows: 1;
-  --cell-size: 44px;
+  --cols: 3;
+  --rows: 3;
+  --cell-size: 30px;
   flex: 0 0 auto;
 }
 

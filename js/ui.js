@@ -8,6 +8,7 @@ import { initSettings, getLongPressMs } from './settings.js';
 // 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
 const TIMER_TICK_MS = 250;          // タイマー表示の更新間隔
 const DOUBLE_TAP_MS = 350;          // この間隔以内の 2 回目のタップをダブルタップとみなし、拡大を抑止する
+const LONG_FLASH_RANGE = 1;         // 長押し成立時に光らせる範囲（押したマスから何マス外まで。1 = 3×3）
 const LED_MAX = 999;                // 3 桁表示の上限
 const STORAGE_KEY_DIFFICULTY = 'ms-difficulty';
 
@@ -331,6 +332,22 @@ function setHighlight(indices) {
   press.highlighted = indices;
 }
 
+/**
+ * 長押し成立の合図。押したマスを中心に、周囲 LONG_FLASH_RANGE マスまでの範囲を一斉に光らせる。
+ * 指で隠れる中心のマスだけでは気付きにくいため、周囲まで広げている
+ */
+function flashAround(index) {
+  const { col, row } = game.toCoord(index);
+  for (let dr = -LONG_FLASH_RANGE; dr <= LONG_FLASH_RANGE; dr++) {
+    for (let dc = -LONG_FLASH_RANGE; dc <= LONG_FLASH_RANGE; dc++) {
+      const c = col + dc;
+      const r = row + dr;
+      if (c < 0 || c >= game.cols || r < 0 || r >= game.rows) continue;
+      flashCell(cellEls[game.toIndex(c, r)]);
+    }
+  }
+}
+
 function stopLongPressTimer() {
   if (press && press.timer !== null) {
     clearTimeout(press.timer);
@@ -350,7 +367,7 @@ function restartLongPressTimer() {
     current.longFired = true;
     setHighlight([]);
     longPressAction(index);
-    flashCell(cellEls[index]);
+    flashAround(index);
     if (!game.isOver) setFace('normal');
   }, getLongPressMs());
 }

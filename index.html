@@ -128,8 +128,11 @@
 
       <div class="settings-row settings-try">
         <div class="settings-label">試し押し（長押しで旗が立つ／外れる）</div>
-        <div class="board dummy-board" aria-hidden="true">
-          <div class="cell hidden" id="dummy-cell"></div>
+        <!-- 3×3 の中央だけが押せる。周囲は長押し成立時に光る範囲を見せるための飾り -->
+        <div class="board dummy-board" id="dummy-board" aria-hidden="true">
+          <div class="cell hidden"></div><div class="cell hidden"></div><div class="cell hidden"></div>
+          <div class="cell hidden"></div><div class="cell hidden" id="dummy-cell"></div><div class="cell hidden"></div>
+          <div class="cell hidden"></div><div class="cell hidden"></div><div class="cell hidden"></div>
         </div>
       </div>
 
