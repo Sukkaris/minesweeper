@@ -1,7 +1,7 @@
 // 簡易設定（第2段階の暫定版。第3段階で正式な設定画面に移す）。
 // 長押し時間の調整と、その場で感触を確かめる試し押し用ダミーマスを担当する。
 
-import { createIcon, flashCell } from './dom-utils.js';
+import { createIcon, sinkCell } from './dom-utils.js';
 
 // ---------- 調整用の定数 ----------
 const LONG_PRESS_DEFAULT_MS = 300;  // 長押しとみなす時間の既定値
@@ -67,7 +67,7 @@ export function closeSettings() {
 }
 
 // ---------- 試し押し用のダミーマス ----------
-// 長押しで旗が立ち、もう一度長押しすると外れるだけのもの。盤面と同じ沈み込み・フラッシュを出す
+// 長押しで旗が立ち、もう一度長押しすると外れるだけのもの。盤面と同じ沈み込み・成立時の動きを出す
 
 function renderDummyCell() {
   dummyCellEl.className = 'cell ' + (dummyFlagged ? 'flag' : 'hidden');
@@ -91,8 +91,8 @@ function onDummyPointerDown(event) {
     dummyFlagged = !dummyFlagged;
     renderDummyCell();
     dummyCellEl.classList.add('pressed');   // 指を離すまでは沈めたままにする（盤面と同じ挙動）
-    // 盤面と同じく、周囲のマスまで（3×3 全体を）光らせる
-    for (const cell of dummyBoardEl.querySelectorAll('.cell')) flashCell(cell);
+    // 盤面と同じく、周囲のマスまで（3×3 全体を）沈めて戻す
+    for (const cell of dummyBoardEl.querySelectorAll('.cell')) sinkCell(cell);
   }, longPressMs);
   dummyPress = current;
   dummyCellEl.classList.add('pressed');

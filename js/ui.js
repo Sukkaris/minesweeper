@@ -1,14 +1,14 @@
 // UI 層。DOM 操作・イベント処理・描画を担当する。ゲームのルールは game.js に任せる。
 
 import { Game, GameState, DIFFICULTIES, DEFAULT_DIFFICULTY } from './game.js';
-import { createIcon, flashCell } from './dom-utils.js';
+import { createIcon, sinkCell } from './dom-utils.js';
 import { initSettings, getLongPressMs } from './settings.js';
 
 // ---------- 調整用の定数 ----------
 // 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
 const TIMER_TICK_MS = 250;          // タイマー表示の更新間隔
 const DOUBLE_TAP_MS = 350;          // この間隔以内の 2 回目のタップをダブルタップとみなし、拡大を抑止する
-const LONG_FLASH_RANGE = 1;         // 長押し成立時に光らせる範囲（押したマスから何マス外まで。1 = 3×3）
+const LONG_SINK_RANGE = 1;          // 長押し成立時に沈める範囲（押したマスから何マス外まで。1 = 3×3）
 const LED_MAX = 999;                // 3 桁表示の上限
 const STORAGE_KEY_DIFFICULTY = 'ms-difficulty';
 
@@ -333,17 +333,17 @@ function setHighlight(indices) {
 }
 
 /**
- * 長押し成立の合図。押したマスを中心に、周囲 LONG_FLASH_RANGE マスまでの範囲を一斉に光らせる。
+ * 長押し成立の合図。押したマスを中心に、周囲 LONG_SINK_RANGE マスまでの範囲を一斉に沈めて戻す。
  * 指で隠れる中心のマスだけでは気付きにくいため、周囲まで広げている
  */
-function flashAround(index) {
+function sinkAround(index) {
   const { col, row } = game.toCoord(index);
-  for (let dr = -LONG_FLASH_RANGE; dr <= LONG_FLASH_RANGE; dr++) {
-    for (let dc = -LONG_FLASH_RANGE; dc <= LONG_FLASH_RANGE; dc++) {
+  for (let dr = -LONG_SINK_RANGE; dr <= LONG_SINK_RANGE; dr++) {
+    for (let dc = -LONG_SINK_RANGE; dc <= LONG_SINK_RANGE; dc++) {
       const c = col + dc;
       const r = row + dr;
       if (c < 0 || c >= game.cols || r < 0 || r >= game.rows) continue;
-      flashCell(cellEls[game.toIndex(c, r)]);
+      sinkCell(cellEls[game.toIndex(c, r)]);
     }
   }
 }
@@ -367,7 +367,7 @@ function restartLongPressTimer() {
     current.longFired = true;
     setHighlight([]);
     longPressAction(index);
-    flashAround(index);
+    sinkAround(index);
     if (!game.isOver) setFace('normal');
   }, getLongPressMs());
 }

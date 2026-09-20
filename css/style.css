@@ -23,8 +23,9 @@
   --update-banner-height: 36px;
   --press-scale: 0.94;           /* 押下中の縮小率 */
   --press-duration: 60ms;        /* 沈み込みの所要時間 */
-  --long-flash-duration: 250ms;  /* 長押し成立時のフラッシュ時間 */
-  --long-flash-width: 3px;       /* フラッシュの縁の太さ */
+  --long-sink-duration: 250ms;   /* 長押し成立時に 3×3 が沈んで戻るまでの時間 */
+  --long-sink-scale: 0.88;       /* 沈んだときの縮小率（押下中の沈み込みより一段深く） */
+  --long-sink-brightness: 0.8;   /* 沈んだときの暗さ */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -70,7 +71,6 @@
   --color-button-active-fg: #ffffff;
 
   --color-cell-pressed: #b0b0b0;       /* 押下中のマスの背景（やや暗く） */
-  --color-long-flash: #ff7a00;         /* 長押し成立時に縁が光る色（灰色の上で目立つ濃いオレンジ） */
 
   --color-footer-flag-bg: #b98484;     /* フラグモード時のフッター背景（彩度を抑えた赤系） */
   --color-footer-flag-fg: #ffffff;
@@ -394,23 +394,23 @@ button {
   transform: scale(var(--press-scale));
 }
 
-/* 長押し成立時のフラッシュ：指で隠れる中心ではなく、マスの周縁だけを一瞬明るく光らせる */
-.cell.long-flash {
-  z-index: 1;
+/* 長押し成立時の合図：押したマスを中心とした 3×3 の範囲が一斉に沈んで戻る。
+   指で隠れる中心だけでなく周囲も動くので、指の下が見えなくても成立が分かる。
+   開放済みのマス（平坦）は縮小と暗化だけで沈む */
+.cell.long-sink {
+  animation: long-sink var(--long-sink-duration) ease-out;
 }
 
-.cell.long-flash::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: var(--long-flash-width) solid var(--color-long-flash);
-  pointer-events: none;
-  animation: long-flash var(--long-flash-duration) ease-out forwards;
+.cell.hidden.long-sink,
+.cell.flag.long-sink {
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
 }
 
-@keyframes long-flash {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+@keyframes long-sink {
+  0%   { transform: scale(1);                     filter: brightness(1); }
+  30%  { transform: scale(var(--long-sink-scale)); filter: brightness(var(--long-sink-brightness)); }
+  65%  { transform: scale(var(--long-sink-scale)); filter: brightness(var(--long-sink-brightness)); }
+  100% { transform: scale(1);                     filter: brightness(1); }
 }
 
 /* 開放済み：平坦で、細い暗色の枠線（左上のみ） */

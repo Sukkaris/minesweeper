@@ -1,6 +1,6 @@
 // DOM まわりの小道具。ui.js と settings.js の両方から使う。
 
-const LONG_FLASH_MS = 280;   // 長押し成立フラッシュのクラスを付けておく時間（CSS の --long-flash-duration より少し長め）
+const LONG_SINK_MS = 280;   // 長押し成立アニメーションのクラスを付けておく時間（CSS の --long-sink-duration より少し長め）
 
 /** SVG シンボルを参照する <svg><use> を生成する */
 export function createIcon(symbolId, className) {
@@ -13,10 +13,10 @@ export function createIcon(symbolId, className) {
   return svg;
 }
 
-/** 長押し成立の合図（マスの周縁を一瞬光らせる）。常時有効で、設定ではオフにしない */
-export function flashCell(cell) {
-  cell.classList.remove('long-flash');
+/** 長押し成立の合図（マスを一瞬沈めて戻す）。常時有効で、設定ではオフにしない */
+export function sinkCell(cell) {
+  cell.classList.remove('long-sink');
   void cell.offsetWidth;   // クラスを付け直してもアニメーションが再生されるようにする
-  cell.classList.add('long-flash');
-  setTimeout(() => cell.classList.remove('long-flash'), LONG_FLASH_MS);
+  cell.classList.add('long-sink');
+  setTimeout(() => cell.classList.remove('long-sink'), LONG_SINK_MS);
 }
