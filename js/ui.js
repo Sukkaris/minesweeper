@@ -7,6 +7,7 @@ import { initSettings, getLongPressMs } from './settings.js';
 // ---------- 調整用の定数 ----------
 // 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
 const TIMER_TICK_MS = 250;          // タイマー表示の更新間隔
+const DOUBLE_TAP_MS = 350;          // この間隔以内の 2 回目のタップをダブルタップとみなし、拡大を抑止する
 const LED_MAX = 999;                // 3 桁表示の上限
 const STORAGE_KEY_DIFFICULTY = 'ms-difficulty';
 
@@ -427,6 +428,23 @@ document.addEventListener('visibilitychange', () => {
 
 // 長押し時の iOS のコールアウトメニューやデスクトップの右クリックメニューを抑止
 document.addEventListener('contextmenu', (event) => event.preventDefault());
+
+// ダブルタップ拡大の抑止（iOS は viewport の user-scalable=no を無視することがある）。
+// 短い間隔で 2 回目のタップが終わった瞬間に標準動作を止めれば、拡大は起きない。
+// ただしボタン・スライダー・設定パネルは click イベントで動くので、そこでは止めない
+// （止めると click が発火しなくなる）。これらは CSS の touch-action: manipulation で抑止済み。
+let lastTouchEndTime = 0;
+document.addEventListener('touchend', (event) => {
+  const now = Date.now();
+  const isDoubleTap = now - lastTouchEndTime < DOUBLE_TAP_MS;
+  lastTouchEndTime = now;
+  if (!isDoubleTap || !event.cancelable) return;
+  if (event.target.closest('button, input, .settings')) return;
+  event.preventDefault();
+}, { passive: false });
+
+// ピンチ拡大の開始も止める（iOS Safari 独自のイベント）
+document.addEventListener('gesturestart', (event) => event.preventDefault());
 
 smileyEl.addEventListener('click', () => newGame(difficultyKey));
 modeToggleEl.addEventListener('click', toggleMode);
