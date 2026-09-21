@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/board.css">
   <link rel="stylesheet" href="./css/settings.css">
   <link rel="stylesheet" href="./css/themes.css">
 </head>
@@ -26,16 +27,56 @@
     変数の値はテーマ側（themes.css）で差し替えられる。
   -->
   <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <!--
+      旗と地雷は全テーマで共通の形状（各 <symbol> の先頭の <g>）を使い、色だけをテーマが変える。
+      例外はターミナルと木目の 2 テーマのみ。形状を差し替える代わりに、
+      <g> の display を CSS 変数（--icon-flag-terminal 等）で切り替えている。
+      既定はクラシックの形状だけが表示され、テーマ側が変数を上書きすると別の形状に入れ替わる。
+    -->
     <symbol id="icon-flag" viewBox="0 0 24 24">
-      <path d="M12 3h2v15h-2z" style="fill: var(--color-flag-pole)"/>
-      <path d="M6 20h12v-2h-4v-1h-4v1H6z" style="fill: var(--color-flag-pole)"/>
-      <path d="M14 3 4 8l10 5z" style="fill: var(--color-flag)"/>
+      <!-- 共通：三角旗。ペーパーは同じ形のまま輪郭線（--flag-stroke）で赤鉛筆風の質感を足す -->
+      <g style="display: var(--icon-flag-default)">
+        <path d="M12 3h2v15h-2z" style="fill: var(--color-flag-pole)"/>
+        <path d="M6 20h12v-2h-4v-1h-4v1H6z" style="fill: var(--color-flag-pole)"/>
+        <path d="M14 3 4 8l10 5z"
+              style="fill: var(--color-flag); stroke: var(--flag-stroke); stroke-width: var(--flag-stroke-width); stroke-dasharray: var(--flag-dash); stroke-linejoin: round"/>
+      </g>
+      <!-- ターミナル：⚑ 相当の記号（細い旗竿と、なびく旗）を緑一色で -->
+      <g style="display: var(--icon-flag-terminal)">
+        <path d="M6 2.5h1.8v19H6z" style="fill: var(--color-flag)"/>
+        <path d="M7.8 4c3-1.6 5.5 1.4 8.6 0 1 0 2 .6 3 0v8c-1 .6-2 0-3 0-3.1 1.4-5.6-1.6-8.6 0z"
+              style="fill: var(--color-flag)"/>
+      </g>
+      <!-- 木目：朱印風。朱色の角印の中に、旗を模した白い印影 -->
+      <g style="display: var(--icon-flag-wood)">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" style="fill: var(--color-flag)"/>
+        <path d="M10 6.5h2v11h-2z" style="fill: var(--color-mine-shine)"/>
+        <path d="M12 6.5l6 2.5-6 2.5z" style="fill: var(--color-mine-shine)"/>
+        <path d="M7 17.5h10v1.5H7z" style="fill: var(--color-mine-shine)"/>
+      </g>
     </symbol>
     <symbol id="icon-mine" viewBox="0 0 24 24">
-      <path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"
-            style="fill: none; stroke: var(--color-mine); stroke-width: 2; stroke-linecap: round"/>
-      <circle cx="12" cy="12" r="6.5" style="fill: var(--color-mine)"/>
-      <rect x="8.5" y="8.5" width="3" height="3" style="fill: var(--color-mine-shine)"/>
+      <!-- 共通：棘のある球 -->
+      <g style="display: var(--icon-mine-default)">
+        <path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"
+              style="fill: none; stroke: var(--color-mine); stroke-width: 2; stroke-linecap: round"/>
+        <circle cx="12" cy="12" r="6.5" style="fill: var(--color-mine)"/>
+        <rect x="8.5" y="8.5" width="3" height="3" style="fill: var(--color-mine-shine)"/>
+      </g>
+      <!-- ターミナル：✳ 相当の記号（8 本の線）を赤で -->
+      <g style="display: var(--icon-mine-terminal)">
+        <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"
+              style="fill: none; stroke: var(--color-mine); stroke-width: 2.4; stroke-linecap: round"/>
+        <circle cx="12" cy="12" r="2.2" style="fill: var(--color-mine)"/>
+      </g>
+      <!-- 木目：黒い焼き印風。焦げた輪の中に地雷の印 -->
+      <g style="display: var(--icon-mine-wood)">
+        <circle cx="12" cy="12" r="9" style="fill: none; stroke: var(--color-mine); stroke-width: 2.2; opacity: 0.85"/>
+        <circle cx="12" cy="12" r="9.8" style="fill: none; stroke: var(--color-mine); stroke-width: 1; opacity: 0.35"/>
+        <circle cx="12" cy="12" r="4.2" style="fill: var(--color-mine)"/>
+        <path d="M12 5.5v3M12 15.5v3M5.5 12h3M15.5 12h3"
+              style="fill: none; stroke: var(--color-mine); stroke-width: 2; stroke-linecap: round"/>
+      </g>
     </symbol>
     <symbol id="icon-wrong" viewBox="0 0 24 24">
       <path d="M4 4l16 16M20 4 4 20"
@@ -177,10 +218,10 @@
         </div>
       </section>
 
-      <!-- 2. テーマ（選択肢は settings.js の配列から生成） -->
+      <!-- 2. テーマ（選択肢は settings.js の配列から生成。各項目にそのテーマで描いた 3×3 のプレビュー盤面が付く） -->
       <section class="settings-section">
         <h3 class="settings-heading">テーマ</h3>
-        <div class="choice-group" id="theme-group"></div>
+        <div class="choice-group theme-group" id="theme-group"></div>
       </section>
 
       <!-- 3. 無推測モード（既定オン。次のゲームの初手から効く） -->
@@ -212,19 +253,20 @@
         </div>
       </section>
 
-      <!-- 5. 視覚演出 / 6. サウンド（第5段階で機能を実装。ここでは保存のみ） -->
+      <!-- 5. 開放・終了時の演出 / 6. サウンド
+           押下中のハイライトと長押しの沈み込みは操作の手応えなので、演出トグルの対象外（常時有効） -->
       <section class="settings-section">
         <label class="toggle-row">
           <span class="toggle-text">
-            <span class="toggle-label">視覚演出</span>
-            <span class="toggle-note">クリア時などの演出（準備中）</span>
+            <span class="toggle-label">開放・終了時の演出</span>
+            <span class="toggle-note">空白が波紋のように広がる・クリアや失敗の動き。押した手応えは常に有効</span>
           </span>
           <input class="toggle" id="toggle-effects" type="checkbox">
         </label>
         <label class="toggle-row">
           <span class="toggle-text">
             <span class="toggle-label">サウンド</span>
-            <span class="toggle-note">効果音（準備中）</span>
+            <span class="toggle-note">短い電子音（開放・旗・クリア・失敗）</span>
           </span>
           <input class="toggle" id="toggle-sound" type="checkbox">
         </label>

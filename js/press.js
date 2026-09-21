@@ -95,6 +95,7 @@ function onPointerDown(event) {
   // 同じポインタの前回の押下が残っていれば（ウィンドウ外で離した等）先に片付ける
   clearPress();
 
+  if (deps.onPressStart) deps.onPressStart();
   if (deps.isBlocked()) return;
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   const index = deps.cellIndexAtPoint(event.clientX, event.clientY);
@@ -139,6 +140,7 @@ function onPointerCancel(event) {
  * @param {() => Game} options.getGame                  現在のゲーム（newGame で差し替わるので関数で受ける）
  * @param {(index:number) => HTMLElement} options.getCell 添字 → セル要素
  * @param {(x:number, y:number) => number} options.cellIndexAtPoint 画面座標 → 添字（盤面外は -1）
+ * @param {() => void} [options.onPressStart]          指が触れた直後（判定の前）に呼ぶ。演出の残りを描き切る用
  * @param {() => boolean} options.isBlocked             押下を受け付けない状態か（終了後・設定画面・盤面生成中）
  * @param {() => number} options.getLongPressMs         長押し閾値
  * @param {(face:string) => void} options.setFace       スマイリーの表情

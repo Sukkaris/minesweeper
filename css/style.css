@@ -1,13 +1,21 @@
 /* ============================================================
    レイアウト・共通スタイル・CSS 変数の定義
    色・寸法・フォントはすべてここで変数化し、テーマは themes.css で上書きする。
+   盤面・マス・演出の見た目は board.css、設定画面は settings.css に分けてある。
    ============================================================ */
 
-:root {
+/* :root の値がそのままクラシックテーマ。
+   設定画面のテーマ選択では、現在のテーマの中に別テーマの小さなプレビュー（<div data-theme>）を置く。
+   data-theme を持つ要素すべてに既定値を当て直すことで、プレビューが親テーマの変数
+   （形状の切り替えや角丸など、そのテーマが上書きしていないもの）を引き継がないようにしている。
+   themes.css は同じ詳細度で後に読まれるので、各テーマの上書きはそのまま勝つ */
+:root,
+[data-theme] {
   /* --- フォント --- */
   --font-board: Menlo, 'Courier New', monospace;
   --font-ui: Menlo, 'Courier New', monospace;
   --font-weight-board: 700;
+  --cell-font-offset: 0px;       /* 数字のフォントサイズの補正（手書き書体のペーパーだけ +2px） */
 
   /* --- 寸法 --- */
   --header-height: 50px;
@@ -26,6 +34,37 @@
   --long-sink-duration: 250ms;   /* 長押し成立時に 3×3 が沈んで戻るまでの時間 */
   --long-sink-scale: 0.88;       /* 沈んだときの縮小率（押下中の沈み込みより一段深く） */
   --long-sink-brightness: 0.8;   /* 沈んだときの暗さ */
+
+  /* --- マスの形状（テーマが上書きする。ミニマルはベベルと枠線を 0 にする） --- */
+  --cell-bevel-min: 2px;         /* 未開放マスのベベルの最小の太さ */
+  --cell-bevel-ratio: 0.09;      /* ベベルの太さ = マスの辺 × この値 */
+  --cell-revealed-border: 1px;   /* 開放済みマスの左上の枠線の太さ */
+  --cell-radius: 0px;            /* マスの角丸 */
+  --cell-hidden-shadow: none;    /* 未開放マスの内側の影（ミニマル・ネオン・木目が使う） */
+  --cell-revealed-shadow: none;  /* 開放済みマスの内側の影（木目の彫り込み等） */
+  --cell-text-shadow: none;      /* 数字の発光（ターミナル・ネオン） */
+  --board-shadow: none;          /* 盤面の外枠の発光（ネオン） */
+  --num-tilt-max: 0deg;          /* 数字の傾きの最大値（ペーパー。マスごとの決定的な種 × この値） */
+  --num-shift-max: 0px;          /* 数字の位置ずれの最大値（同上） */
+
+  /* --- 旗・地雷の形状の切り替え（ターミナルと木目だけが差し替える） ---
+     index.html の <symbol> 内の各形状は、これらの変数で display を切り替えている */
+  --icon-flag-default: inline;
+  --icon-flag-terminal: none;
+  --icon-flag-wood: none;
+  --icon-mine-default: inline;
+  --icon-mine-terminal: none;
+  --icon-mine-wood: none;
+  --icon-flag-rotate: 0deg;      /* 旗の傾き（ペーパーの走り書き風） */
+  --flag-stroke: none;           /* 旗の輪郭線（ペーパーの赤鉛筆風。既定は無し） */
+  --flag-stroke-width: 0;
+  --flag-dash: none;             /* 輪郭線のかすれ（stroke-dasharray） */
+
+  /* --- 演出の時間（effects.js が参照する値は effects.js 側の定数に置く） --- */
+  --reveal-pop-duration: 140ms;  /* 波紋で開くマスの「ぱっ」と現れる時間 */
+  --explode-duration: 500ms;     /* 踏んだ地雷の強調 */
+  --win-glow-duration: 1200ms;   /* 勝利時の盤面の発光 */
+
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -58,6 +97,8 @@
   --color-mine: #000000;
   --color-mine-shine: #ffffff;
   --color-wrong: #ff0000;
+  --color-win-glow: rgba(255, 255, 255, 0.85);   /* 勝利時に盤面が帯びる光の色 */
+  --color-explode-flash: #ffffff;                /* 踏んだ地雷の一瞬の閃光 */
 
   --color-led-bg: #000000;
   --color-led-fg: #ff0000;
@@ -424,131 +465,6 @@ button {
 .board.generating {
   opacity: var(--generating-opacity);
 }
-
-/* ---------- 盤面 ---------- */
-
-/* 盤面が収まるときは中央に置き、はみ出すときは上から並べてスクロールする */
-.board-wrap {
-  margin: auto;
-  padding: var(--board-gap);
-  flex: 0 0 auto;
-}
-
-.board {
-  --cols: 9;
-  --rows: 9;
-  --cell-size: 40px;                /* ui.js が実測値で上書きする */
-  --cell-bevel: max(2px, calc(var(--cell-size) * 0.09));
-  --cell-font-size: calc(var(--cell-size) * 0.62);
-
-  display: grid;
-  grid-template-columns: repeat(var(--cols), var(--cell-size));
-  grid-auto-rows: var(--cell-size);
-  background: var(--color-board-bg);
-  border: var(--board-frame) solid;
-  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
-  touch-action: pan-y;
-}
-
-.cell {
-  position: relative;
-  width: var(--cell-size);
-  height: var(--cell-size);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-board);
-  font-weight: var(--font-weight-board);
-  font-size: var(--cell-font-size);
-  line-height: 1;
-  overflow: hidden;
-}
-
-/* 未開放：左上が明るく右下が暗い立体ベベル */
-.cell.hidden,
-.cell.flag,
-.cell.wrong-flag,
-.cell.mine {
-  background: var(--color-cell-hidden);
-  border: var(--cell-bevel) solid;
-  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
-}
-
-/* 敗北時に開示した地雷は平坦に見せる */
-.cell.mine {
-  border: 1px solid var(--color-cell-border);
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-}
-
-/* 沈み込み：ベベルを反転し、わずかに縮小して背景を暗くする（常時有効・設定でオフにしない） */
-.cell {
-  transition: transform var(--press-duration) ease-out,
-              background-color var(--press-duration) ease-out;
-}
-
-.cell.hidden.pressed,
-.cell.flag.pressed {
-  background: var(--color-cell-pressed);
-  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
-  transform: scale(var(--press-scale));
-}
-
-/* 長押し成立時の合図：押したマスを中心とした 3×3 の範囲が一斉に沈んで戻る。
-   指で隠れる中心だけでなく周囲も動くので、指の下が見えなくても成立が分かる。
-   開放済みのマス（平坦）は縮小と暗化だけで沈む */
-.cell.long-sink {
-  animation: long-sink var(--long-sink-duration) ease-out;
-}
-
-.cell.hidden.long-sink,
-.cell.flag.long-sink {
-  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
-}
-
-@keyframes long-sink {
-  0%   { transform: scale(1);                     filter: brightness(1); }
-  30%  { transform: scale(var(--long-sink-scale)); filter: brightness(var(--long-sink-brightness)); }
-  65%  { transform: scale(var(--long-sink-scale)); filter: brightness(var(--long-sink-brightness)); }
-  100% { transform: scale(1);                     filter: brightness(1); }
-}
-
-/* 開放済み：平坦で、細い暗色の枠線（左上のみ） */
-.cell.blank,
-.cell.number,
-.cell.exploded {
-  background: var(--color-cell-revealed);
-  border: 1px solid var(--color-cell-border);
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-}
-
-.cell.exploded {
-  background: var(--color-cell-exploded);
-}
-
-.cell.n1 { color: var(--color-n1); }
-.cell.n2 { color: var(--color-n2); }
-.cell.n3 { color: var(--color-n3); }
-.cell.n4 { color: var(--color-n4); }
-.cell.n5 { color: var(--color-n5); }
-.cell.n6 { color: var(--color-n6); }
-.cell.n7 { color: var(--color-n7); }
-.cell.n8 { color: var(--color-n8); }
-
-/* ---------- マス内のアイコン ---------- */
-
-.cell .icon {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 12%;
-  pointer-events: none;
-}
-
-/* アイコンの色は index.html の <symbol> 内で CSS 変数（--color-flag 等）を参照している。
-   <use> の複製内には CSS セレクタが届かないので、ここでは形状ごとの色指定を書かない。 */
 
 /* ---------- フッター（モード切替ボタン） ---------- */
 

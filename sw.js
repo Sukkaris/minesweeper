@@ -4,7 +4,7 @@
 // ★ コードを変更したら、必ず下の CACHE_VERSION の数字を 1 つ増やすこと ★
 // これを忘れると、ホーム画面のアプリは古いキャッシュで起動し続け、変更が反映されない。
 
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 8;
 const CACHE_NAME = 'ms-cache-v' + CACHE_VERSION;
 
 // キャッシュ対象。tools/ 配下は開発用なので含めない。
@@ -14,12 +14,15 @@ const ASSETS = [
   './index.html',
   './manifest.json',
   './css/style.css',
+  './css/board.css',
   './css/settings.css',
   './css/themes.css',
   './js/game.js',
   './js/solver.js',
   './js/press.js',
   './js/notice.js',
+  './js/effects.js',
+  './js/sound.js',
   './js/storage.js',
   './js/stats.js',
   './js/stats-screen.js',

@@ -2,10 +2,509 @@
    テーマごとの変数値の上書き
    <html data-theme="..."> の属性値で切り替える。
    ここには変数の上書きだけを書き、レイアウトや形状の定義は style.css に置く。
+
+   セレクタを :root[data-theme] ではなく [data-theme] にしているのは、
+   設定画面のテーマ選択で、各テーマの小さなプレビュー盤面を
+   <div data-theme="..."> で包んで同時に表示するため。
+
+   旗・地雷の形状は index.html の <symbol> に全種類を持ち、
+   --icon-flag-* / --icon-mine-* で表示する形状を選ぶ（差し替えるのはターミナルと木目のみ）。
+   スマイリーは全テーマ共通で、色だけを変える。
+
+   Web フォントは使わない。フォントは必ずフォールバック付きで列挙する。
    ============================================================ */
 
 /* クラシック（Windows 3.1〜95 風）
-   style.css の :root 既定値がそのままクラシックの値なので、上書きは不要。
-   他テーマと同じ書き方に揃えるため、ブロックだけ用意しておく。 */
-:root[data-theme="classic"] {
+   style.css の :root 既定値がそのままクラシックの値。[data-theme="classic"] も style.css 側で
+   :root と同じ値を当てているので、ここでは上書きしない。 */
+[data-theme="classic"] {
+}
+
+/* ------------------------------------------------------------
+   ダーク：夜間用。単純な色反転ではなく、コントラストを抑えて発光感を落とす。
+   背景は純黒を避けた暗い灰青。数字はクラシックの色相を保ちつつ明度を上げる。
+   ------------------------------------------------------------ */
+[data-theme="dark"] {
+  --font-board: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-ui: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-weight-board: 500;
+
+  --color-bg: #1c2130;
+  --color-ui-fg: #dde3ee;
+  --color-panel: #242b3b;
+  --color-bevel-light: #3b4559;
+  --color-bevel-dark: #11151f;
+
+  --color-board-bg: #1c2130;
+  --color-cell-hidden: #2b3446;
+  --color-cell-revealed: #1f2533;
+  --color-cell-border: #141926;
+  --color-cell-exploded: #a83a3a;
+  --color-cell-pressed: #212938;
+
+  --color-n1: #7f9fff;
+  --color-n2: #6fcc7c;
+  --color-n3: #ff7f7f;
+  --color-n4: #a3b3ff;
+  --color-n5: #d99090;
+  --color-n6: #6fd3d3;
+  --color-n7: #e8ecf3;
+  --color-n8: #9aa3b5;
+
+  --color-flag: #ff6f6f;
+  --color-flag-pole: #dde3ee;
+  --color-mine: #e8ecf3;
+  --color-mine-shine: #1c2130;
+  --color-wrong: #ff6f6f;
+  --color-win-glow: rgba(150, 180, 255, 0.6);
+  --color-explode-flash: #ffd6d6;
+
+  --color-led-bg: #0c0f16;
+  --color-led-fg: #ff5f5f;
+  --color-smiley-face: #e3c451;
+  --color-smiley-line: #1a1a1a;
+
+  --color-button-bg: #2b3446;
+  --color-button-fg: #dde3ee;
+  --color-button-active-bg: #11151f;
+  --color-button-active-fg: #ffffff;
+
+  --color-footer-flag-bg: #5a3a3f;
+  --color-footer-flag-fg: #f2e2e4;
+  --color-footer-flag-bevel-light: #7a5a5f;
+  --color-footer-flag-bevel-dark: #3a2226;
+
+  --color-notice-bg: rgba(12, 15, 22, 0.92);
+  --color-notice-fg: #dde3ee;
+
+  --color-sheet-bg: #1c2130;
+  --color-sheet-header-bg: #242b3b;
+  --color-muted: #9aa3b5;
+  --color-input-bg: #0f131c;
+  --color-choice-selected-bg: #11151f;
+  --color-toggle-off: #3b4559;
+  --color-toggle-on: #2e8b4a;
+  --color-toggle-knob: #c9d1e0;
+  --color-danger-bg: #8a3a3a;
+  --color-danger-fg: #ffffff;
+  --color-table-line: #3b4559;
+}
+
+/* ------------------------------------------------------------
+   ミニマル：装飾を削ぎ落とした平面デザイン。
+   ベベルと枠線を廃し、白いタイルと下地の色差・わずかな内側の影だけで未開放と開放を区別する。
+   細身のフォント（weight 300）で個性を出す。
+   ------------------------------------------------------------ */
+[data-theme="minimal"] {
+  --font-board: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-ui: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-weight-board: 300;
+
+  --cell-bevel-min: 0px;
+  --cell-bevel-ratio: 0;
+  --cell-revealed-border: 0px;
+  --cell-radius: 3px;
+  --board-frame: 0px;
+  /* タイルの周囲に下地色の細い隙間を作り、その内側の下端だけを薄く陰らせる */
+  --cell-hidden-shadow: inset 0 0 0 1.5px #e4e4e9, inset 0 -2.5px 0 1.5px rgba(0, 0, 0, 0.06);
+
+  --color-bg: #f2f2f4;
+  --color-ui-fg: #2b2b2e;
+  --color-panel: #f2f2f4;
+  --color-bevel-light: #e6e6ea;
+  --color-bevel-dark: #d8d8de;
+
+  --color-board-bg: #e4e4e9;
+  --color-cell-hidden: #fcfcfd;
+  --color-cell-revealed: #e4e4e9;
+  --color-cell-border: transparent;
+  --color-cell-exploded: #e89a9a;
+  --color-cell-pressed: #ececef;
+
+  --color-n1: #4a6fa5;
+  --color-n2: #4f8a5b;
+  --color-n3: #b05656;
+  --color-n4: #5b5b9a;
+  --color-n5: #8a5a3a;
+  --color-n6: #4a8a8a;
+  --color-n7: #3a3a3a;
+  --color-n8: #808085;
+
+  --color-flag: #d05a5a;
+  --color-flag-pole: #55555a;
+  --color-mine: #3a3a3e;
+  --color-mine-shine: #fcfcfd;
+  --color-wrong: #d05a5a;
+  --color-win-glow: rgba(255, 255, 255, 0.9);
+  --color-explode-flash: #ffffff;
+
+  --color-led-bg: #ffffff;
+  --color-led-fg: #2b2b2e;
+  --color-smiley-face: #f5d76e;
+  --color-smiley-line: #3a3a3e;
+
+  --color-button-bg: #ffffff;
+  --color-button-fg: #2b2b2e;
+  --color-button-active-bg: #d8d8de;
+  --color-button-active-fg: #2b2b2e;
+
+  --color-footer-flag-bg: #ecd2d2;
+  --color-footer-flag-fg: #5a2a2a;
+  --color-footer-flag-bevel-light: #f4e2e2;
+  --color-footer-flag-bevel-dark: #d8bcbc;
+
+  --color-notice-bg: rgba(43, 43, 46, 0.9);
+  --color-notice-fg: #ffffff;
+
+  --color-sheet-bg: #f2f2f4;
+  --color-sheet-header-bg: #f2f2f4;
+  --color-muted: #7a7a80;
+  --color-input-bg: #ffffff;
+  --color-choice-selected-bg: #d8d8de;
+  --color-toggle-off: #c8c8ce;
+  --color-toggle-on: #4a9a5a;
+  --color-toggle-knob: #ffffff;
+  --color-danger-bg: #c85a5a;
+  --color-danger-fg: #ffffff;
+  --color-table-line: #d8d8de;
+}
+
+/* ------------------------------------------------------------
+   ターミナル：黒地に緑の等幅文字。CRT 端末を模す。
+   未開放は黒地に薄い緑の罫線、開放済みはやや明るい黒。数字は緑を基調に色相と明度を僅かに変える。
+   旗は ⚑ 相当を緑、地雷は ✳ 相当を赤で（形状を差し替える 2 テーマのうちの 1 つ）。
+   ------------------------------------------------------------ */
+[data-theme="terminal"] {
+  --font-board: Menlo, 'Courier New', monospace;
+  --font-ui: Menlo, 'Courier New', monospace;
+  --font-weight-board: 700;
+
+  --cell-bevel-min: 1px;
+  --cell-bevel-ratio: 0;
+  --cell-text-shadow: 0 0 3px currentColor;   /* ごく弱い発光 */
+
+  --icon-flag-default: none;
+  --icon-flag-terminal: inline;
+  --icon-mine-default: none;
+  --icon-mine-terminal: inline;
+
+  --color-bg: #000000;
+  --color-ui-fg: #33ff66;
+  --color-panel: #000000;
+  --color-bevel-light: #1a5a2e;
+  --color-bevel-dark: #1a5a2e;
+
+  --color-board-bg: #000000;
+  --color-cell-hidden: #000000;
+  --color-cell-revealed: #121c14;
+  --color-cell-border: #143a1e;
+  --color-cell-exploded: #4a0a0a;
+  --color-cell-pressed: #0a2a12;
+
+  --color-n1: #4dff7a;
+  --color-n2: #2ee05c;
+  --color-n3: #b0ff5c;
+  --color-n4: #2ddba8;
+  --color-n5: #d8ff80;
+  --color-n6: #22d0c0;
+  --color-n7: #e0ffe6;
+  --color-n8: #6fa87c;
+
+  --color-flag: #33ff66;
+  --color-flag-pole: #33ff66;
+  --color-mine: #ff3b3b;
+  --color-mine-shine: #ff3b3b;
+  --color-wrong: #ff3b3b;
+  --color-win-glow: rgba(51, 255, 102, 0.55);
+  --color-explode-flash: #ff8080;
+
+  --color-led-bg: #000000;
+  --color-led-fg: #33ff66;
+  --color-smiley-face: #0d140e;
+  --color-smiley-line: #33ff66;
+
+  --color-button-bg: #000000;
+  --color-button-fg: #33ff66;
+  --color-button-active-bg: #1a5a2e;
+  --color-button-active-fg: #000000;
+
+  --color-footer-flag-bg: #2a0a0a;
+  --color-footer-flag-fg: #ff6b6b;
+  --color-footer-flag-bevel-light: #6a1a1a;
+  --color-footer-flag-bevel-dark: #6a1a1a;
+
+  --color-notice-bg: rgba(0, 20, 6, 0.92);
+  --color-notice-fg: #33ff66;
+
+  --color-sheet-bg: #000000;
+  --color-sheet-header-bg: #000000;
+  --color-muted: #1fa346;
+  --color-input-bg: #050a06;
+  --color-choice-selected-bg: #0f3a1c;
+  --color-toggle-off: #143a1e;
+  --color-toggle-on: #33ff66;
+  --color-toggle-knob: #0d140e;
+  --color-danger-bg: #5a0a0a;
+  --color-danger-fg: #ff6b6b;
+  --color-table-line: #143a1e;
+}
+
+/* ------------------------------------------------------------
+   木目：囲碁盤・将棋盤の質感。
+   背景は間隔の不揃いな縞を色相を僅かにずらして複数層重ね、板目を表現する。
+   未開放は上辺が明るく下辺が暗い盛り上がった木片、開放済みは一段暗い木肌が覗く彫り込み。
+   旗は朱印風、地雷は黒い焼き印風（形状を差し替える 2 テーマのうちの 1 つ）。
+   ------------------------------------------------------------ */
+[data-theme="wood"] {
+  --font-board: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-ui: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-weight-board: 600;
+
+  --icon-flag-default: none;
+  --icon-flag-wood: inline;
+  --icon-mine-default: none;
+  --icon-mine-wood: inline;
+
+  /* 木片の上辺のハイライトと下辺の陰 */
+  --cell-hidden-shadow: inset 0 1px 0 rgba(255, 236, 200, 0.45), inset 0 -1px 0 rgba(40, 20, 0, 0.35);
+  /* 彫り込み：上から落ちる影 */
+  --cell-revealed-shadow: inset 0 2px 3px rgba(30, 15, 0, 0.45), inset 0 0 1px rgba(30, 15, 0, 0.3);
+
+  /* 板目：不揃いな間隔の縞を 3 層。上 2 層は半透明で、下の基調の縞に重なる */
+  --color-bg:
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0) 0 11px, rgba(60, 30, 10, 0.10) 11px 13px,
+      rgba(0, 0, 0, 0) 13px 29px, rgba(60, 30, 10, 0.07) 29px 31px,
+      rgba(0, 0, 0, 0) 31px 47px, rgba(60, 30, 10, 0.12) 47px 48px),
+    repeating-linear-gradient(90deg,
+      rgba(255, 224, 170, 0.10) 0 5px, rgba(0, 0, 0, 0) 5px 17px,
+      rgba(255, 224, 170, 0.06) 17px 23px, rgba(0, 0, 0, 0) 23px 41px),
+    repeating-linear-gradient(90deg,
+      #b8874d 0 9px, #b07f45 9px 16px, #bd8f55 16px 27px, #ab7a42 27px 38px, #b5844a 38px 53px);
+  --color-ui-fg: #2a1a0a;
+  --color-panel: #ad7d45;
+  --color-bevel-light: #d9b07a;
+  --color-bevel-dark: #6b4520;
+
+  --color-board-bg:
+    repeating-linear-gradient(90deg,
+      #8a5f30 0 7px, #82582c 7px 13px, #906535 13px 24px, #7f552a 24px 33px, #8c6132 33px 46px);
+  --color-cell-hidden: linear-gradient(180deg, #cc9d60 0%, #b8874d 55%, #ad7a42 100%);
+  --color-cell-revealed: linear-gradient(180deg, #8a5f30 0%, #966b3a 100%);
+  --color-cell-border: #6b4520;
+  --color-cell-exploded: #7a2a1a;
+  --color-cell-pressed: linear-gradient(180deg, #b08248 0%, #a07040 100%);
+
+  --color-n1: #1f2a4a;
+  --color-n2: #1f4a2a;
+  --color-n3: #6a1f1f;
+  --color-n4: #3a1f5a;
+  --color-n5: #5a2f10;
+  --color-n6: #143f3f;
+  --color-n7: #141414;
+  --color-n8: #4a3a2a;
+
+  --color-flag: #c8321e;
+  --color-flag-pole: #c8321e;
+  --color-mine: #1a1008;
+  --color-mine-shine: #f3e6c8;   /* 朱印の中の白い印影にも使う */
+  --color-wrong: #c8321e;
+  --color-win-glow: rgba(255, 220, 150, 0.7);
+  --color-explode-flash: #ffd0a0;
+
+  --color-led-bg: #2a1a0a;
+  --color-led-fg: #ff9a3c;
+  --color-smiley-face: #f0c85a;
+  --color-smiley-line: #3a2a10;
+
+  --color-button-bg: #b98a52;
+  --color-button-fg: #2a1a0a;
+  --color-button-active-bg: #6b4520;
+  --color-button-active-fg: #f3e6c8;
+
+  --color-footer-flag-bg: #8a4a3a;
+  --color-footer-flag-fg: #f3e6c8;
+  --color-footer-flag-bevel-light: #b07060;
+  --color-footer-flag-bevel-dark: #5a2a20;
+
+  --color-notice-bg: rgba(42, 26, 10, 0.92);
+  --color-notice-fg: #f3e6c8;
+
+  --color-sheet-bg: #b98a52;
+  --color-sheet-header-bg: #ad7d45;
+  --color-muted: #5a4020;
+  --color-input-bg: #f3e6c8;
+  --color-choice-selected-bg: #8f6636;
+  --color-toggle-off: #6b4520;
+  --color-toggle-on: #4a7a3a;
+  --color-toggle-knob: #e8d0a0;
+  --color-danger-bg: #8a3a2a;
+  --color-danger-fg: #f3e6c8;
+  --color-table-line: #6b4520;
+}
+
+/* ------------------------------------------------------------
+   ネオン：暗い紫紺の上に、シアンとマゼンタの枠線が発光する。
+   数字は値ごとに異なる蛍光色でそれぞれ発光。開放済みのマスは発光を抑えて未開放との差を明確にする。
+   発光は box-shadow / text-shadow による静的な陰影なので、演出オフでも残る。
+   ------------------------------------------------------------ */
+[data-theme="neon"] {
+  --font-board: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-ui: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-weight-board: 700;
+
+  --cell-bevel-min: 1.5px;
+  --cell-bevel-ratio: 0.05;
+  --cell-hidden-shadow: inset 0 0 4px rgba(0, 229, 255, 0.7), inset 0 0 10px rgba(255, 43, 214, 0.35);
+  --cell-text-shadow: 0 0 4px currentColor, 0 0 10px currentColor;
+  --board-shadow: 0 0 6px #00e5ff, 0 0 14px rgba(255, 43, 214, 0.7);
+
+  --color-bg: #1a0f2e;
+  --color-ui-fg: #e0f7ff;
+  --color-panel: #1a0f2e;
+  --color-bevel-light: #00e5ff;
+  --color-bevel-dark: #ff2bd6;
+
+  --color-board-bg: #14092a;
+  --color-cell-hidden: #22143a;
+  --color-cell-revealed: #14092a;
+  --color-cell-border: #2e1c50;
+  --color-cell-exploded: #ff2b6b;
+  --color-cell-pressed: #14092a;
+
+  --color-n1: #00e5ff;
+  --color-n2: #39ff14;
+  --color-n3: #ff2bd6;
+  --color-n4: #ffe600;
+  --color-n5: #ff7b00;
+  --color-n6: #8f7bff;
+  --color-n7: #ffffff;
+  --color-n8: #ff4d4d;
+
+  --color-flag: #ff2bd6;
+  --color-flag-pole: #00e5ff;
+  --color-mine: #e0f7ff;
+  --color-mine-shine: #1a0f2e;
+  --color-wrong: #ffe600;
+  --color-win-glow: rgba(0, 229, 255, 0.85);
+  --color-explode-flash: #ffffff;
+
+  --color-led-bg: #0a0518;
+  --color-led-fg: #ff2bd6;
+  --color-smiley-face: #ffe600;
+  --color-smiley-line: #1a0f2e;
+
+  --color-button-bg: #22143a;
+  --color-button-fg: #e0f7ff;
+  --color-button-active-bg: #ff2bd6;
+  --color-button-active-fg: #1a0f2e;
+
+  --color-footer-flag-bg: #4a1040;
+  --color-footer-flag-fg: #ffd6f5;
+  --color-footer-flag-bevel-light: #ff2bd6;
+  --color-footer-flag-bevel-dark: #7a1060;
+
+  --color-notice-bg: rgba(10, 5, 24, 0.92);
+  --color-notice-fg: #e0f7ff;
+
+  --color-sheet-bg: #1a0f2e;
+  --color-sheet-header-bg: #22143a;
+  --color-muted: #9a8ab8;
+  --color-input-bg: #0a0518;
+  --color-choice-selected-bg: #3a2060;
+  --color-toggle-off: #3a2a55;
+  --color-toggle-on: #00b8cc;
+  --color-toggle-knob: #e0f7ff;
+  --color-danger-bg: #7a1040;
+  --color-danger-fg: #ffd6f5;
+  --color-table-line: #3a2a55;
+}
+
+/* ------------------------------------------------------------
+   ペーパー：生成りの紙に薄青の方眼。
+   未開放は薄く塗られた升目、開放済みは紙の地色そのまま。
+   数字は手書き風に僅かに傾け、位置をずらす（ずれ量はマスの座標から決定的に算出。ui.js 参照）。
+   旗は共通の三角旗のまま、輪郭線のかすれと僅かな傾きで赤鉛筆の走り書き風にする。地雷は黒く塗り潰した円。
+   'Bradley Hand' / 'Marker Felt' は iOS / macOS 専用。Windows では代替書体になるので実機で確認すること。
+   ------------------------------------------------------------ */
+[data-theme="paper"] {
+  --font-board: 'Bradley Hand', 'Marker Felt', 'Segoe Print', cursive;
+  --font-ui: 'Bradley Hand', 'Marker Felt', 'Segoe Print', cursive;
+  --font-weight-board: 700;
+  --cell-font-offset: 2px;       /* 手書き書体の 1 が縦棒に見えないよう、このテーマだけ 2px 大きく */
+  --num-tilt-max: 7deg;
+  --num-shift-max: 1.2px;
+
+  --cell-bevel-min: 1px;
+  --cell-bevel-ratio: 0;
+  --board-frame: 2px;
+
+  --icon-flag-rotate: -7deg;
+  --flag-stroke: #b02a1a;
+  --flag-stroke-width: 1.3;
+  --flag-dash: 3 1.2 5 0.8 2 1.5;   /* 線のかすれ：長さの不揃いな破線で太さのムラに見せる */
+
+  /* 生成りの紙に薄青の方眼（縦横の repeating-linear-gradient） */
+  --color-bg:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0) 0 19px, rgba(120, 160, 220, 0.35) 19px 20px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 19px, rgba(120, 160, 220, 0.35) 19px 20px),
+    #f7f1e1;
+  --color-ui-fg: #2b2b2b;
+  --color-panel: #f7f1e1;
+  --color-bevel-light: #b8cbe6;
+  --color-bevel-dark: #b8cbe6;
+
+  --color-board-bg: #f7f1e1;
+  --color-cell-hidden: #e2e8f2;
+  --color-cell-revealed: #f7f1e1;
+  --color-cell-border: #b8cbe6;
+  --color-cell-exploded: #f2a0a0;
+  --color-cell-pressed: #d3dcea;
+
+  --color-n1: #2b4ea8;
+  --color-n2: #2f7a3a;
+  --color-n3: #c0392b;
+  --color-n4: #4b3b9a;
+  --color-n5: #8a4a1a;
+  --color-n6: #1f7a7a;
+  --color-n7: #2b2b2b;
+  --color-n8: #7a7a7a;
+
+  --color-flag: #e04a38;
+  --color-flag-pole: #3a3a3a;
+  --color-mine: #1e1e1e;
+  --color-mine-shine: #1e1e1e;   /* 光沢を消し、黒く塗り潰した円に見せる */
+  --color-wrong: #c0392b;
+  --color-win-glow: rgba(255, 225, 140, 0.9);
+  --color-explode-flash: #ffffff;
+
+  --color-led-bg: #2b2b2b;
+  --color-led-fg: #ffb347;
+  --color-smiley-face: #ffd86b;
+  --color-smiley-line: #3a3a3a;
+
+  --color-button-bg: #efe6d0;
+  --color-button-fg: #2b2b2b;
+  --color-button-active-bg: #b8cbe6;
+  --color-button-active-fg: #2b2b2b;
+
+  --color-footer-flag-bg: #f0c8c0;
+  --color-footer-flag-fg: #6a2a20;
+  --color-footer-flag-bevel-light: #f8dcd6;
+  --color-footer-flag-bevel-dark: #c89a90;
+
+  --color-notice-bg: rgba(43, 43, 43, 0.9);
+  --color-notice-fg: #f7f1e1;
+
+  --color-sheet-bg: #f7f1e1;
+  --color-sheet-header-bg: #f7f1e1;
+  --color-muted: #7a7060;
+  --color-input-bg: #ffffff;
+  --color-choice-selected-bg: #d3dcea;
+  --color-toggle-off: #b8cbe6;
+  --color-toggle-on: #5a9a5a;
+  --color-toggle-knob: #ffffff;
+  --color-danger-bg: #c0392b;
+  --color-danger-fg: #ffffff;
+  --color-table-line: #b8cbe6;
 }

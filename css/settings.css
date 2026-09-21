@@ -186,6 +186,54 @@
   font-weight: 700;
 }
 
+/* ---------- テーマの選択肢（プレビュー盤面付き） ---------- */
+
+/* 7 つを 4 列に並べる。各ボタンは縦積み：上にプレビュー、下に名前 */
+.choice-group.theme-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.choice.theme-choice {
+  flex: none;
+  min-width: 0;
+  height: auto;
+  padding: 6px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-label {
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* プレビューはそのテーマの背景色の上に盤面を置く。data-theme を持つのでその中だけ変数が差し替わる */
+.theme-preview {
+  width: 100%;
+  height: 68px;           /* 盤面の外枠の太さがテーマごとに違っても、ボタンの高さを揃える */
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  color: var(--color-ui-fg);
+  font-family: var(--font-board);
+  pointer-events: none;   /* 中のマスはただの飾り。ボタン本体だけが click を受ける */
+}
+
+.preview-board {
+  --cols: 3;
+  --rows: 3;
+  --cell-size: 17px;
+  flex: 0 0 auto;
+  touch-action: manipulation;
+}
+
 /* ---------- カスタム難易度の入力欄 ---------- */
 
 .custom-panel {

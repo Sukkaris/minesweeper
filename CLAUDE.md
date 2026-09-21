@@ -46,6 +46,8 @@ minesweeper/
 ├── index.html      … 構造のみ。ロジックとスタイルを含めない
 ├── css/
 │   ├── style.css   … レイアウト、共通スタイル、CSS変数の定義
+│   ├── board.css   … 盤面・マス・演出の見た目（第5段階で style.css から分割）
+│   ├── settings.css … 設定画面・統計画面
 │   └── themes.css  … テーマごとの変数値の上書きのみ
 ├── js/
 │   ├── game.js     … 盤面データ、地雷配置、開放処理、勝敗判定（DOM に触れない）

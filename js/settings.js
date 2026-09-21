@@ -20,10 +20,28 @@ const LONG_PRESS_MIN_MS = 200;
 const LONG_PRESS_MAX_MS = 600;
 const LONG_PRESS_STEP_MS = 50;
 const NO_GUESS_DEFAULT_ON_SCHEMA = 2;   // 無推測モードの既定をオンにした設定スキーマの版（移行判定用）
+const EFFECTS_AUTO_SCHEMA = 3;          // 演出の既定を 'auto' にした設定スキーマの版（移行判定用）
+const EFFECTS_AUTO = 'auto';            // 演出トグルを一度も触っていない状態。OS の「視差効果を減らす」に従う
 
-/** テーマ一覧。第5段階で増やす。選択肢はこの配列から生成する */
-const THEMES = Object.freeze([
-  { key: 'classic', label: 'クラシック' },
+/** テーマ一覧。選択肢（プレビュー盤面付き）はこの配列から生成する。値は themes.css の data-theme と一致させる */
+export const THEMES = Object.freeze([
+  { key: 'classic',  label: 'クラシック' },
+  { key: 'dark',     label: 'ダーク' },
+  { key: 'minimal',  label: 'ミニマル' },
+  { key: 'terminal', label: 'ターミナル' },
+  { key: 'wood',     label: '木目' },
+  { key: 'neon',     label: 'ネオン' },
+  { key: 'paper',    label: 'ペーパー' },
+]);
+
+/**
+ * テーマ選択のプレビュー盤面（3×3）の中身。旗・地雷・数字・未開放・空白を一通り見せる。
+ * 各要素は renderPreviewCell() が読む { kind, number }
+ */
+const PREVIEW_CELLS = Object.freeze([
+  { kind: 'hidden' }, { kind: 'number', number: 1 }, { kind: 'number', number: 2 },
+  { kind: 'flag' },   { kind: 'blank' },             { kind: 'number', number: 3 },
+  { kind: 'hidden' }, { kind: 'mine' },              { kind: 'hidden' },
 ]);
 
 const DEFAULT_SETTINGS = Object.freeze({
@@ -32,8 +50,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   noGuess: true,             // 無推測モード（既定オン）
   customHighDensityNoGuess: false,   // 高密度カスタムでも無推測モードを使うか（既定オフ。明示的にオンへ戻せる）
   longPressMs: LONG_PRESS_DEFAULT_MS,
-  effects: true,             // 視覚演出（第5段階で機能を実装）
-  sound: false,              // サウンド（第5段階で機能を実装）
+  effects: EFFECTS_AUTO,     // 開放・終了時の演出。'auto' | true | false（'auto' は OS の視差効果の設定に従う）
+  sound: false,              // サウンド（既定オフ）
   custom: DEFAULT_CUSTOM,    // カスタム難易度の入力内容
 });
 
@@ -44,10 +62,13 @@ const SETTINGS_VALIDATORS = {
   noGuess: isBool,
   customHighDensityNoGuess: isBool,
   longPressMs: (v) => Number.isFinite(v) && v >= LONG_PRESS_MIN_MS && v <= LONG_PRESS_MAX_MS,
-  effects: isBool,
+  effects: (v) => v === EFFECTS_AUTO || isBool(v),
   sound: isBool,
   custom: (v) => v && typeof v === 'object',   // 中身は clampCustomConfig で必ず範囲内に丸める
 };
+
+/** OS 側の「視差効果を減らす」。演出トグルが未設定（'auto'）のときの初期値に使う */
+const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 // ---------- DOM 参照 ----------
 const settingsButtonEl = document.getElementById('settings-button');
@@ -74,6 +95,8 @@ const statsOpenEl = document.getElementById('stats-open');
 
 // ---------- 状態 ----------
 let settings = loadSettings();
+// 初回描画の前にテーマを当て、クラシックが一瞬見えてから切り替わるのを避ける
+document.documentElement.dataset.theme = settings.theme;
 let callbacks = {};        // { onOpen, onClose, onDifficultyChange }
 let dummyPress = null;     // 試し押し中の情報 { pointerId, timer }
 let dummyFlagged = false;
@@ -88,6 +111,11 @@ function loadSettings() {
   // 機能の実装（スキーマ 2）に伴い既定をオンにしたので、スキーマ 2 未満の保存値は引き継がず既定値に戻す
   if (raw && !(raw.schemaVersion >= NO_GUESS_DEFAULT_ON_SCHEMA)) {
     merged.noGuess = DEFAULT_SETTINGS.noGuess;
+  }
+  // 第4段階まで（スキーマ 3 未満）は演出が「準備中」で、触っていなくても true が保存されていた。
+  // 明示的に設定した値と区別できないので、'auto'（OS 設定に従う）に戻す
+  if (raw && !(raw.schemaVersion >= EFFECTS_AUTO_SCHEMA)) {
+    merged.effects = EFFECTS_AUTO;
   }
   return merged;
 }
@@ -115,6 +143,21 @@ export function getLongPressMs() {
 /** カスタム難易度の現在の入力内容（範囲内に丸めた値） */
 export function getCustomConfig() {
   return { key: CUSTOM_KEY, label: CUSTOM_LABEL, ...settings.custom };
+}
+
+/**
+ * 開放・終了時の演出を出すか。
+ * トグルを一度も触っていなければ OS の「視差効果を減らす」が有効な端末ではオフ、それ以外はオン。
+ * 一度でも明示的に設定していればその値を優先する
+ */
+export function isEffectsEnabled() {
+  if (settings.effects === EFFECTS_AUTO) return !reducedMotionQuery.matches;
+  return settings.effects;
+}
+
+/** サウンドを鳴らすか */
+export function isSoundEnabled() {
+  return settings.sound;
 }
 
 /**
@@ -248,9 +291,73 @@ function initCustomPanel() {
 
 // ---------- テーマ ----------
 
+/** プレビュー盤面の 1 マス。盤面と同じ .cell のクラスと SVG を使うので、テーマの見た目がそのまま出る */
+function renderPreviewCell(spec) {
+  const cell = document.createElement('div');
+  cell.className = 'cell ' + spec.kind;
+  if (spec.kind === 'number') {
+    cell.classList.add('n' + spec.number);
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = String(spec.number);
+    cell.appendChild(num);
+  } else if (spec.kind === 'flag') {
+    cell.appendChild(createIcon('icon-flag', 'icon-flag'));
+  } else if (spec.kind === 'mine') {
+    cell.appendChild(createIcon('icon-mine', 'icon-mine'));
+  }
+  return cell;
+}
+
+/**
+ * テーマの選択肢を作る。各ボタンは「そのテーマで描いた 3×3 のプレビュー盤面」＋「名前」。
+ * プレビューは <div data-theme="..."> で包むだけで、themes.css の変数がその中でだけ差し替わる
+ */
+function buildThemeChoices() {
+  themeGroupEl.innerHTML = '';
+  for (const theme of THEMES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'choice theme-choice';
+    button.dataset.key = theme.key;
+    button.setAttribute('aria-label', theme.label);
+
+    const preview = document.createElement('div');
+    preview.className = 'theme-preview';
+    preview.dataset.theme = theme.key;
+    const board = document.createElement('div');
+    board.className = 'board preview-board';
+    for (const spec of PREVIEW_CELLS) board.appendChild(renderPreviewCell(spec));
+    preview.appendChild(board);
+
+    const label = document.createElement('span');
+    label.className = 'theme-label';
+    label.textContent = theme.label;
+
+    button.appendChild(preview);
+    button.appendChild(label);
+    button.addEventListener('click', () => {
+      setSetting('theme', theme.key);
+      applyTheme(theme.key);
+    });
+    themeGroupEl.appendChild(button);
+  }
+}
+
 function applyTheme(key) {
   document.documentElement.dataset.theme = key;
   markChoice(themeGroupEl, key);
+  updateThemeColorMeta();
+  // 盤面の外枠の太さがテーマで変わるので、ui.js にマスの大きさを計算し直してもらう
+  if (callbacks.onThemeChange) callbacks.onThemeChange(key);
+}
+
+/** ブラウザの UI 色（theme-color）をテーマのパネル色に合わせる。値は CSS 変数から読む */
+function updateThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const panel = getComputedStyle(document.documentElement).getPropertyValue('--color-panel').trim();
+  if (panel) meta.content = panel;
 }
 
 // ---------- トグル ----------
@@ -258,6 +365,16 @@ function applyTheme(key) {
 function bindToggle(input, key) {
   input.checked = settings[key];
   input.addEventListener('change', () => setSetting(key, input.checked));
+}
+
+/** 演出トグル：表示は 'auto' を解決した値。触ったら明示的な true / false として保存する */
+function bindEffectsToggle(input) {
+  input.checked = isEffectsEnabled();
+  input.addEventListener('change', () => setSetting('effects', input.checked));
+  // アプリを開いたまま OS の「視差効果を減らす」を切り替えても、未設定（'auto'）なら表示を追随させる
+  reducedMotionQuery.addEventListener('change', () => {
+    if (settings.effects === EFFECTS_AUTO) input.checked = isEffectsEnabled();
+  });
 }
 
 // ---------- 長押し時間 ----------
@@ -307,10 +424,11 @@ function onDummyPointerEnd(event) {
 // ---------- 初期化 ----------
 
 /**
- * @param {{onOpen?: () => void, onClose?: () => void, onDifficultyChange?: (key: string) => void}} options
+ * @param {{onOpen?: () => void, onClose?: () => void, onDifficultyChange?: (key: string) => void, onThemeChange?: (key: string) => void}} options
  *   onOpen  : 開く直前（盤面の押下状態を片付け、タイマーを止める用）
  *   onClose : 閉じた直後（タイマーを再開する用）
  *   onDifficultyChange : 難易度が選ばれた。ui.js はこれを受けて新しい盤面を作る
+ *   onThemeChange : テーマが変わった（起動時の適用も含む）。ui.js はこれを受けてマスの大きさを計算し直す
  */
 export function initSettings(options = {}) {
   callbacks = options;
@@ -320,19 +438,16 @@ export function initSettings(options = {}) {
   buildChoiceGroup(difficultyGroupEl, difficultyItems, onDifficultySelected);
   initCustomPanel();
 
-  // テーマ
-  buildChoiceGroup(themeGroupEl, THEMES, (key) => {
-    setSetting('theme', key);
-    applyTheme(key);
-  });
+  // テーマ（プレビュー盤面付き）
+  buildThemeChoices();
   applyTheme(settings.theme);
 
-  // トグル類（視覚演出・サウンドは保存のみ。機能は第5段階で実装）
+  // トグル類
   bindToggle(noGuessEl, 'noGuess');
   bindToggle(customNoGuessEl, 'customHighDensityNoGuess');
   // 無推測モードを切り替えたら、カスタム欄の高密度の注意書きの表示も合わせる
   noGuessEl.addEventListener('change', () => renderDensity(readCustomInputs()));
-  bindToggle(effectsEl, 'effects');
+  bindEffectsToggle(effectsEl);
   bindToggle(soundEl, 'sound');
 
   // 長押し時間

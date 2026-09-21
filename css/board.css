@@ -1,0 +1,195 @@
+/* ============================================================
+   盤面とマスの見た目、マス内のアイコン、開放・終了時の演出
+   style.css から分割したもの。変数は style.css の :root で定義し、テーマは themes.css で上書きする。
+   ============================================================ */
+
+/* ---------- 盤面 ---------- */
+
+/* 盤面が収まるときは中央に置き、はみ出すときは上から並べてスクロールする */
+.board-wrap {
+  margin: auto;
+  padding: var(--board-gap);
+  flex: 0 0 auto;
+}
+
+.board {
+  --cols: 9;
+  --rows: 9;
+  --cell-size: 40px;                /* ui.js が実測値で上書きする */
+  --cell-bevel: max(var(--cell-bevel-min), calc(var(--cell-size) * var(--cell-bevel-ratio)));
+  --cell-font-size: calc(var(--cell-size) * 0.62 + var(--cell-font-offset));
+
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell-size));
+  grid-auto-rows: var(--cell-size);
+  background: var(--color-board-bg);
+  border: var(--board-frame) solid;
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  box-shadow: var(--board-shadow);
+  touch-action: pan-y;
+}
+
+.cell {
+  position: relative;
+  width: var(--cell-size);
+  height: var(--cell-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-board);
+  font-weight: var(--font-weight-board);
+  font-size: var(--cell-font-size);
+  line-height: 1;
+  border-radius: var(--cell-radius);
+  text-shadow: var(--cell-text-shadow);
+  overflow: hidden;
+}
+
+/* 未開放：左上が明るく右下が暗い立体ベベル */
+.cell.hidden,
+.cell.flag,
+.cell.wrong-flag,
+.cell.mine {
+  background: var(--color-cell-hidden);
+  border: var(--cell-bevel) solid;
+  border-color: var(--color-bevel-light) var(--color-bevel-dark) var(--color-bevel-dark) var(--color-bevel-light);
+  box-shadow: var(--cell-hidden-shadow);
+}
+
+/* 敗北時に開示した地雷は平坦に見せる */
+.cell.mine {
+  border: var(--cell-revealed-border) solid var(--color-cell-border);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  box-shadow: var(--cell-revealed-shadow);
+}
+
+/* 沈み込み：ベベルを反転し、わずかに縮小して背景を暗くする（常時有効・設定でオフにしない） */
+.cell {
+  transition: transform var(--press-duration) ease-out,
+              background-color var(--press-duration) ease-out;
+}
+
+.cell.hidden.pressed,
+.cell.flag.pressed {
+  background: var(--color-cell-pressed);
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+  transform: scale(var(--press-scale));
+}
+
+/* 長押し成立時の合図：押したマスを中心とした 3×3 の範囲が一斉に沈んで戻る。
+   指で隠れる中心だけでなく周囲も動くので、指の下が見えなくても成立が分かる。
+   開放済みのマス（平坦）は縮小と暗化だけで沈む */
+.cell.long-sink {
+  animation: long-sink var(--long-sink-duration) ease-out;
+}
+
+.cell.hidden.long-sink,
+.cell.flag.long-sink {
+  border-color: var(--color-bevel-dark) var(--color-bevel-light) var(--color-bevel-light) var(--color-bevel-dark);
+}
+
+@keyframes long-sink {
+  0%   { transform: scale(1);                     filter: brightness(1); }
+  30%  { transform: scale(var(--long-sink-scale)); filter: brightness(var(--long-sink-brightness)); }
+  65%  { transform: scale(var(--long-sink-scale)); filter: brightness(var(--long-sink-brightness)); }
+  100% { transform: scale(1);                     filter: brightness(1); }
+}
+
+/* 開放済み：平坦で、細い暗色の枠線（左上のみ） */
+.cell.blank,
+.cell.number,
+.cell.exploded {
+  background: var(--color-cell-revealed);
+  border: var(--cell-revealed-border) solid var(--color-cell-border);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  box-shadow: var(--cell-revealed-shadow);
+}
+
+.cell.exploded {
+  background: var(--color-cell-exploded);
+}
+
+.cell.n1 { color: var(--color-n1); }
+.cell.n2 { color: var(--color-n2); }
+.cell.n3 { color: var(--color-n3); }
+.cell.n4 { color: var(--color-n4); }
+.cell.n5 { color: var(--color-n5); }
+.cell.n6 { color: var(--color-n6); }
+.cell.n7 { color: var(--color-n7); }
+.cell.n8 { color: var(--color-n8); }
+
+/* 数字本体。ペーパーでは僅かに傾け、位置をずらす。
+   --seed-a / --seed-b は ui.js がマスの座標から決定的に計算して各マスに書く（-1〜1）。
+   他のテーマでは --num-tilt-max / --num-shift-max が 0 なので動かない */
+.cell .num {
+  display: block;
+  transform:
+    translate(calc(var(--seed-b, 0) * var(--num-shift-max)), calc(var(--seed-a, 0) * var(--num-shift-max)))
+    rotate(calc(var(--seed-a, 0) * var(--num-tilt-max)));
+}
+
+/* ---------- マス内のアイコン ---------- */
+
+.cell .icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 12%;
+  pointer-events: none;
+}
+
+/* 旗だけは傾けられる（ペーパーの走り書き風）。中心を軸に回す */
+.cell .icon-flag {
+  transform: rotate(var(--icon-flag-rotate));
+}
+
+/* アイコンの色・形状は index.html の <symbol> 内で CSS 変数（--color-flag、--icon-flag-* 等）を参照している。
+   <use> の複製内には CSS セレクタが届かないので、ここでは形状ごとの色指定を書かない。 */
+
+/* ---------- 演出（設定「開放・終了時の演出」でまとめてオフにできる） ----------
+   押下中のハイライト（.pressed）と長押しの沈み込み（.long-sink）は演出ではなく操作の手応えなので、
+   このトグルの対象外。effects.js は演出オフのときこれらのクラスを付けない */
+
+/* 波紋で遅れて開いたマス：少し小さい状態から「ぱっ」と現れる */
+.cell.reveal-pop {
+  animation: reveal-pop var(--reveal-pop-duration) ease-out;
+}
+
+@keyframes reveal-pop {
+  0%   { transform: scale(0.75); filter: brightness(1.25); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+
+/* 踏んだ地雷：閃光の後、数回明滅して落ち着く */
+.cell.exploding {
+  animation: exploding var(--explode-duration) ease-out;
+}
+
+@keyframes exploding {
+  0%   { background-color: var(--color-explode-flash); transform: scale(1.15); }
+  25%  { background-color: var(--color-cell-exploded);  transform: scale(1); }
+  45%  { background-color: var(--color-explode-flash); }
+  65%  { background-color: var(--color-cell-exploded); }
+  100% { background-color: var(--color-cell-exploded); transform: scale(1); }
+}
+
+/* 順次開示される地雷・誤った旗の ×：小さく現れる */
+.cell.mine-pop,
+.cell.flag-pop {
+  animation: reveal-pop var(--reveal-pop-duration) ease-out;
+}
+
+/* 勝利：盤面全体がふわっと明るくなって戻る */
+.board.win-glow {
+  animation: win-glow var(--win-glow-duration) ease-out;
+}
+
+@keyframes win-glow {
+  0%   { filter: brightness(1);    box-shadow: var(--board-shadow); }
+  30%  { filter: brightness(1.25); box-shadow: 0 0 18px 4px var(--color-win-glow); }
+  100% { filter: brightness(1);    box-shadow: var(--board-shadow); }
+}
+

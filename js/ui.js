@@ -12,6 +12,8 @@ import { recordPlayStart, recordWin } from './stats.js';
 import { initPress, clearPress } from './press.js';
 import { findNoGuessLayout, attemptLimitFor } from './solver.js';
 import { showLoading, hideLoading, showToast, hideToast } from './notice.js';
+import { initEffects, renderChanges, cancelEffects, flushEffects } from './effects.js';
+import { initSound, playFlag } from './sound.js';
 
 // ---------- 調整用の定数 ----------
 // 長押し時間の閾値（既定 300ms・範囲 200〜600ms）は settings.js で管理する
@@ -163,6 +165,17 @@ function updateFaceFromState() {
 
 // ---------- 盤面の生成と描画 ----------
 
+/**
+ * マスの座標から -1〜1 の値を決定的に作る（ペーパーテーマの数字の傾き・位置ずれ用）。
+ * 乱数ではなく座標だけから決めるので、再描画しても同じマスは同じだけ傾く
+ */
+function cellSeed(col, row, salt) {
+  let h = Math.imul(col + 1, 73856093) ^ Math.imul(row + 1, 19349663) ^ Math.imul(salt, 83492791);
+  h = Math.imul(h ^ (h >>> 13), 0x5bd1e995);
+  h ^= h >>> 15;
+  return ((h >>> 0) % 2001) / 1000 - 1;
+}
+
 function buildBoard() {
   boardEl.innerHTML = '';
   boardEl.style.setProperty('--cols', game.cols);
@@ -175,6 +188,8 @@ function buildBoard() {
     cell.className = 'cell hidden';
     cell.dataset.i = i;
     cell.setAttribute('role', 'gridcell');
+    const { col, row } = game.toCoord(i);
+    cell.style.cssText = `--seed-a:${cellSeed(col, row, 1).toFixed(3)};--seed-b:${cellSeed(col, row, 2).toFixed(3)}`;
     cellEls[i] = cell;
     fragment.appendChild(cell);
   }
@@ -190,10 +205,15 @@ function renderCell(index) {
   cell.textContent = '';
 
   switch (view.kind) {
-    case 'number':
+    case 'number': {
       cell.classList.add('n' + view.number);
-      cell.textContent = String(view.number);
+      // 数字は span に包む（テーマによって傾け・ずらすため。style.css の .num）
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = String(view.number);
+      cell.appendChild(num);
       break;
+    }
     case 'flag':
       cell.appendChild(createIcon('icon-flag', 'icon-flag'));
       break;
@@ -248,6 +268,7 @@ function cellIndexAtPoint(x, y) {
 function newGame(key) {
   clearPress();          // 押下中の長押しタイマーも含めて確実に破棄する
   cancelNoGuess();       // 無推測の盤面を生成中なら打ち切る
+  cancelEffects();       // 前のゲームの演出（敗北の地雷開示など）が残っていれば止める
   hideToast();           // 前のゲームの通知（生成失敗など）を持ち越さない
   difficultyKey = key;
   game = new Game(configFor(key));
@@ -290,8 +311,10 @@ function toggleMode() {
 /**
  * 盤面を変える操作を 1 つ実行し、描画・統計・保存をまとめて行う。
  * @param {() => {changed:number[]}} action
+ * @param {number} origin 操作したマス（演出の起点）
  */
-function runAction(action) {
+function runAction(action, origin) {
+  flushEffects();        // 前の操作の演出（波紋）がまだ残っていれば先に描き切る
   const before = game.state;
   const { changed } = action();
   if (changed.length === 0) return;
@@ -300,7 +323,7 @@ function runAction(action) {
   if (before === GameState.READY && game.state !== GameState.READY) recordPlayStart(difficultyKey);
   if (game.state === GameState.WON) recordWin(difficultyKey, game.elapsedMs);
 
-  renderCells(changed);
+  renderChanges(changed, origin);   // 演出の設定に応じて、即座に or 順に描く（effects.js）
   updateMineCounter();
   updateFaceFromState();
   updateRunning();
@@ -321,16 +344,18 @@ function doReveal(index) {
     startNoGuess(index);
     return;
   }
-  runAction(() => game.reveal(index));
+  runAction(() => game.reveal(index), index);
 }
 
 function doChord(index) {
-  runAction(() => game.chord(index));
+  runAction(() => game.chord(index), index);
 }
 
 function doToggleFlag(index) {
+  flushEffects();
   if (!game.toggleFlag(index)) return;
   renderCell(index);
+  playFlag(game.flagged[index] === 1);
   updateMineCounter();
   persistGame();
 }
@@ -388,7 +413,7 @@ function startNoGuess(index) {
         + `${success ? '成功' : '失敗（通常の盤面で開始）'} 試行 ${attempts}/${maxAttempts} 回, ${elapsedMs.toFixed(0)}ms`
       );
       if (!success) showToast('無推測の盤面を生成できませんでした');
-      runAction(() => game.reveal(index, layout));
+      runAction(() => game.reveal(index, layout), index);
     },
   });
 }
@@ -409,11 +434,23 @@ function cancelNoGuess() {
 
 // ---------- イベント登録 ----------
 
+// 演出（波紋・敗北・勝利）とサウンド。newGame より前に初期化しておく
+initEffects({
+  boardEl,
+  getGame: () => game,
+  getCell: (i) => cellEls[i],
+  renderCell,
+});
+initSound();
+
 initPress({
   boardEl,
   getGame: () => game,
   getCell: (i) => cellEls[i],
   cellIndexAtPoint,
+  // 波紋の途中で触られたら先に描き切る。内部では開放済みなのに未開放に見えるマスを、
+  // 見た目のまま操作させないため（旗を立てたつもりがチョーディングになる等）
+  onPressStart: flushEffects,
   // 終了後・設定画面がせり上がっている最中・無推測の盤面生成中は押下を受け付けない
   isBlocked: () => game.isOver || isSettingsOpen() || noGuessJob !== null,
   getLongPressMs,
@@ -448,6 +485,7 @@ initSettings({
   onOpen: () => { clearPress(); updateRunning(); },   // 開いている間はタイマーを止める
   onClose: updateRunning,
   onDifficultyChange: newGame,
+  onThemeChange: fitBoard,   // 盤面の外枠の太さがテーマで変わるので、マスの大きさと当たり判定を計算し直す
 });
 setMode(Mode.REVEAL);
 
